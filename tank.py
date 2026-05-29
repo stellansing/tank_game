@@ -72,6 +72,8 @@ class EnemyTank(Tank):
         self.rect = self.img.get_rect()
         self.rect.center = [left, top]
 
+        self.step=50
+
     def rand_direction(self)->str:
         choice=random.randint(1,4)
         if choice == 1:
@@ -82,13 +84,64 @@ class EnemyTank(Tank):
             return 'U'
         elif choice == 4:
             return 'D'
+
+    def rand_move(self):
+        if self.step <= 0:
+            self.step = 50
+            self.direction = self.rand_direction()
+        else:
+            self.move(self.direction)
+            self.step -= 1
 class Bullet:
-    def __init__(self):
-        pass
-    def display_bullet(self):
-        pass
-    def move(self):
-        pass
+    def __init__(self,tank):
+        self.owner_tank = tank
+        self.img = pygame.image.load('img/enemymissile.gif')
+        self.direction=tank.direction
+        self.rect = self.img.get_rect()
+        self.speed = 5
+        self.live=True
+
+    def bullet_initial_position(self):
+        if self.direction == 'U':
+            self.rect.left=self.owner_tank.rect.left + self.owner_tank.rect.width / 2-self.rect.width / 2
+            self.rect.top = self.owner_tank.rect.top-self.rect.height
+        elif self.direction == 'D':
+            self.rect.left=self.owner_tank.rect.left + self.owner_tank.rect.width / 2-self.rect.width / 2
+            self.rect.top = self.owner_tank.rect.top + self.owner_tank.rect.height
+
+        elif self.direction == 'L':
+            self.rect.left = self.owner_tank.rect.left-self.rect.width
+            self.rect.top=self.owner_tank.rect.top + self.owner_tank.rect.height / 2-self.rect.height / 2
+        elif self.direction == 'R':
+            self.rect.left = self.owner_tank.rect.left + self.owner_tank.rect.width
+            self.rect.top=self.owner_tank.rect.top + self.owner_tank.rect.height / 2-self.rect.height / 2
+
+
+
+    def display_bullet(self, window):
+        window.blit(self.img, self.rect)
+
+    def move(self, window):
+        if self.direction == 'U':
+            if self.rect.top > 0:
+                self.rect = self.rect.move(0, -self.speed)
+            else:
+                self.live=False
+        elif self.direction == 'D':
+            if self.rect.bottom < window.get_rect().bottom:
+                self.rect = self.rect.move(0, self.speed)
+            else:
+                self.live=False
+        elif self.direction == 'L':
+            if self.rect.left > 0:
+                self.rect = self.rect.move(-self.speed, 0)
+            else :
+                self.live=False
+        elif self.direction == 'R':
+            if self.rect.right < window.get_rect().right:
+                self.rect = self.rect.move(self.speed, 0)
+            else:
+                self.live=False
 class Wall:
     def __init__(self):
         pass
@@ -113,6 +166,7 @@ class MainGame:
 
     def __init__(self):
         self.key_order = []
+        self.bullets = []
     def start_game(self,window_size):
         pygame.display.init()
         self.window = pygame.display.set_mode(window_size)
@@ -134,6 +188,7 @@ class MainGame:
 
             self.my_tank.display_tank()
             self.display_enemy_tank()
+            self.display_bullet()
 
             pygame.display.update()
 
@@ -148,6 +203,17 @@ class MainGame:
     def display_enemy_tank(self):
         for enemy_tank in self.enemy_tanks:
             enemy_tank.display_tank()
+            enemy_tank.rand_move()
+
+    def display_bullet(self):
+        for bullet in self.bullets:
+            if bullet.live:
+                bullet.display_bullet(self.window)
+                bullet.move(self.window)
+            else:
+                self.bullets.remove(bullet)
+
+
 
     def get_text_surface(self, text):
 
@@ -159,8 +225,6 @@ class MainGame:
         event_list = pygame.event.get()
         for event in event_list:
             if event.type == pygame.QUIT:
-                print("退出游戏")
-                pygame.quit()
                 self.end_game()
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_LEFT and 'L' not in self.key_order:
@@ -171,6 +235,11 @@ class MainGame:
                     self.key_order.append('U')
                 elif event.key == pygame.K_DOWN and 'D' not in self.key_order:
                     self.key_order.append('D')
+
+                elif event.key == pygame.K_SPACE:
+                    bullet = Bullet(self.my_tank)
+                    self.bullets.append(bullet)
+                    bullet.bullet_initial_position()
 
             if event.type == pygame.KEYUP:
                 if event.key == pygame.K_LEFT and 'L' in self.key_order:
@@ -186,11 +255,14 @@ class MainGame:
 
 
     def tank_move_envent(self):
+
         if self.key_order:
             last_direction = self.key_order[-1]
             self.my_tank.move(last_direction)
 
     def end_game(self):
+        print("退出游戏")
+        pygame.quit()
         exit()
 
 
