@@ -1,28 +1,39 @@
 # -*- coding: utf-8 -*-
 import pygame
-from time import sleep
 import random
+from pygame.sprite import collide_rect,Sprite,Group,groupcollide,spritecollide
 
 window_color=pygame.Color(255, 255, 255)
-class Tank:
+
+class TimeComputer:
+    def __init__(self,interval):
+        self.last_time = pygame.time.get_ticks()
+        self.interval = interval
+    def set_interval(self):
+        if self.last_time + self.interval < pygame.time.get_ticks():
+            self.last_time = pygame.time.get_ticks()
+            return True
+        else:
+            return False
+class Tank(Sprite):
 
 
-    def __init__(self,left,top,window)->None:
-        self.window = window
-
+    def __init__(self,left,top)->None:
+        super().__init__()
         self.images = None
         self.direction = None
         self.img = None
-
         self.rect = None
+        self.live = True
 
         self.speed = 5
+        self.shot_speed = 500
 
-
+        self.time_computer = TimeComputer(self.shot_speed)
 
     def display_tank(self):
         self.img = self.images[self.direction]
-        self.window.blit(self.img, self.rect)
+        MainGame.window.blit(self.img, self.rect)
 
     def speed_change(self, change_direction,accelerate):
         pass
@@ -33,21 +44,25 @@ class Tank:
             if self.rect.left > 0:
                 self.rect = self.rect.move(-self.speed, 0)
         elif self.direction == 'R':
-            if self.rect.right < self.window.get_rect().right:
+            if self.rect.right < MainGame.window.get_rect().right:
                 self.rect = self.rect.move(self.speed, 0)
         elif self.direction == 'U':
             if self.rect.top > 0:
                 self.rect = self.rect.move(0, -self.speed)
         elif self.direction == 'D':
-            if self.rect.bottom < self.window.get_rect().bottom:
+            if self.rect.bottom < MainGame.window.get_rect().bottom:
                 self.rect = self.rect.move(0, self.speed)
 
     def shot(self):
-        pass
+        if not self.time_computer.set_interval():
+            return None
+        bullet = Bullet(self)
+        bullet.bullet_initial_position()
+        return bullet
 
 class MyTank(Tank):
-    def __init__(self,left,top,window):
-        super().__init__(left,top,window)
+    def __init__(self,left,top):
+        super().__init__(left,top)
         self.images = {
             'U': pygame.image.load('img/p1tankU.gif'),
             'D': pygame.image.load('img/p1tankD.gif'),
@@ -59,8 +74,8 @@ class MyTank(Tank):
         self.rect = self.img.get_rect()
         self.rect.center = [left, top]
 class EnemyTank(Tank):
-    def __init__(self, left,top,window):
-        super().__init__(left,top,window)
+    def __init__(self, left,top):
+        super().__init__(left,top)
         self.images = {
             'U': pygame.image.load('img/enemy1U.gif'),
             'D': pygame.image.load('img/enemy1D.gif'),
@@ -92,13 +107,16 @@ class EnemyTank(Tank):
         else:
             self.move(self.direction)
             self.step -= 1
-class Bullet:
+
+
+class Bullet(Sprite):
     def __init__(self,tank):
+        super().__init__()
         self.owner_tank = tank
         self.img = pygame.image.load('img/enemymissile.gif')
         self.direction=tank.direction
         self.rect = self.img.get_rect()
-        self.speed = 5
+        self.speed = 8
         self.live=True
 
     def bullet_initial_position(self):
@@ -142,6 +160,10 @@ class Bullet:
                 self.rect = self.rect.move(self.speed, 0)
             else:
                 self.live=False
+
+    def is_hit(self,tank):
+
+        pass
 class Wall:
     def __init__(self):
         pass
@@ -161,28 +183,33 @@ class Music:
 class MainGame:
     window = None
     my_tank = None
-    enemy_tanks = []
+    enemy_tanks = Group()
+    my_bullets = Group()
+    enemy_bullets = Group()
     enemy_tanks_count = 6
+    clock = None
 
     def __init__(self):
         self.key_order = []
         self.bullets = []
     def start_game(self,window_size):
         pygame.display.init()
-        self.window = pygame.display.set_mode(window_size)
+        MainGame.window = pygame.display.set_mode(window_size)
         pygame.font.init()
         pygame.display.set_caption("Tank War")
+
+        MainGame.clock = pygame.time.Clock()
 
         self.create_my_tank(350,500)
         self.create_enemy_tank()
 
         while True:
-            sleep(0.02)
-            self.window.fill(window_color)
+            MainGame.clock.tick(60)
+            MainGame.window.fill(window_color)
 
             num=100
             text=self.get_text_surface(f"血量{num}")
-            self.window.blit(text,(10,10))
+            MainGame.window.blit(text,(10,10))
 
             self.get_event()
 
@@ -193,26 +220,28 @@ class MainGame:
             pygame.display.update()
 
     def create_my_tank(self,left,top):
-        self.my_tank = MyTank(left,top,self.window)
+        self.my_tank = MyTank(left,top)
 
     def create_enemy_tank(self):
         for i in range(self.enemy_tanks_count):
-            enemy_tank = EnemyTank(random.randint(0, 700), random.randint(0, 500),self.window)
+            enemy_tank = EnemyTank(random.randint(0, 700), random.randint(0, 500))
             self.enemy_tanks.append(enemy_tank)
 
     def display_enemy_tank(self):
         for enemy_tank in self.enemy_tanks:
             enemy_tank.display_tank()
             enemy_tank.rand_move()
+            bullet = enemy_tank.shot()
+            if bullet:
+                self.bullets.append(bullet)
 
     def display_bullet(self):
         for bullet in self.bullets:
             if bullet.live:
-                bullet.display_bullet(self.window)
-                bullet.move(self.window)
+                bullet.display_bullet(MainGame.window)
+                bullet.move(MainGame.window)
             else:
                 self.bullets.remove(bullet)
-
 
 
     def get_text_surface(self, text):
@@ -236,11 +265,6 @@ class MainGame:
                 elif event.key == pygame.K_DOWN and 'D' not in self.key_order:
                     self.key_order.append('D')
 
-                elif event.key == pygame.K_SPACE:
-                    bullet = Bullet(self.my_tank)
-                    self.bullets.append(bullet)
-                    bullet.bullet_initial_position()
-
             if event.type == pygame.KEYUP:
                 if event.key == pygame.K_LEFT and 'L' in self.key_order:
                     self.key_order.remove('L')
@@ -251,6 +275,11 @@ class MainGame:
                 elif event.key == pygame.K_DOWN and 'D' in self.key_order:
                     self.key_order.remove('D')
         keys_pressed = pygame.key.get_pressed()
+        if keys_pressed[pygame.K_SPACE]:
+            bullet = self.my_tank.shot()
+            if bullet:
+                self.bullets.append(bullet)
+
         self.tank_move_envent()
 
 
