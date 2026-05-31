@@ -2,6 +2,7 @@
 import pygame
 import random
 from pygame.sprite import collide_rect,Sprite,Group,groupcollide,spritecollide
+from pathlib import Path
 
 window_color=pygame.Color(255, 255, 255)
 INITIAL_REBORN=(300, 500)
@@ -29,7 +30,7 @@ class Tank(Sprite):
         self.blood=1000
         self.live = True
 
-        self.speed = 3
+        self.speed = 2
         self.shot_speed = 500
 
         self.time_computer = TimeComputer(self.shot_speed)
@@ -43,7 +44,6 @@ class Tank(Sprite):
 
     def move(self,direction):
         old_rect = self.rect.copy()
-        old_direction = self.direction
 
         self.direction = direction
         if self.direction == 'L':
@@ -63,7 +63,6 @@ class Tank(Sprite):
         if pygame.sprite.spritecollideany(self,other_tanks):
             # 发生碰撞，恢复位置和方向
             self.rect = old_rect
-            self.direction = old_direction
             return False
         return True
 
@@ -158,28 +157,39 @@ class Bullet(Sprite):
             if self.rect.top > 0:
                 self.rect = self.rect.move(0, -self.speed)
             else:
-                self.live=False
+                self.kill()
         elif self.direction == 'D':
             if self.rect.bottom < window.get_rect().bottom:
                 self.rect = self.rect.move(0, self.speed)
             else:
-                self.live=False
+                self.kill()
         elif self.direction == 'L':
             if self.rect.left > 0:
                 self.rect = self.rect.move(-self.speed, 0)
             else :
-                self.live=False
+                self.kill()
         elif self.direction == 'R':
             if self.rect.right < window.get_rect().right:
                 self.rect = self.rect.move(self.speed, 0)
             else:
-                self.live=False
+                self.kill()
 
-class Wall:
-    def __init__(self):
-        pass
-    def display_wall(self):
-        pass
+class StaticEntity(Sprite):
+    def __init__(self,position: tuple):
+        super().__init__()
+        self.image = None
+        self.rect = None
+        self.position = position
+        self.live = True
+
+    def display_static_entity(self):
+        MainGame.window.blit(self.image, self.rect)
+class SteelWall(StaticEntity):
+    def __init__(self,position: tuple):
+        super().__init__(position)
+        self.image = pygame.image.load('img/redWall.gif')
+        self.rect = self.image.get_rect()
+        self.rect.left, self.rect.top = position
 class Explode(Sprite):
     def __init__(self, tank):
         super().__init__()
@@ -211,10 +221,23 @@ class Explode(Sprite):
             self.live = False
 
 class Music:
-    def __init__(self):
-        pass
-    def play(self):
-        pass
+    pygame.mixer.init()
+    def __init__(self,music_file, volume=0.1):
+
+        pygame.mixer.music.load(music_file)
+        pygame.mixer.music.set_volume(volume)
+    def play_music(self):
+        pygame.mixer.music.play()
+
+class Sound:
+    pygame.mixer.init()
+
+    def __init__(self, music_file, volume=0.05):
+        self.sound= pygame.mixer.Sound(music_file)
+        self.sound.set_volume(volume)
+
+    def play_music(self):
+        self.sound.play()
 
 class MainGame:
     window = None
@@ -226,16 +249,29 @@ class MainGame:
     my_bullets = Group()
     enemy_bullets = Group()
 
+    walls = Group()
+
     explosions = Group()
 
     enemy_tanks_count = 3
     clock = None
 
+
+
     def __init__(self):
         self.key_order = []
         self.my_tank_dead_time=0
         self.reborn_interval=300
-    def start_game(self,window_size):
+
+        current_dir = Path(__file__).parent
+        # # 构建音频文件路径
+        # hit_music_path = current_dir / "music" / "hit.wav"
+        # # 加载音频
+        # self.hit_music = Sound(str(hit_music_path))
+        self.fire_music = Sound(str(current_dir/"music"/"fire.wav"))
+
+
+    def start_game(self, window_size):
         pygame.display.init()
         MainGame.window = pygame.display.set_mode(window_size)
         pygame.font.init()
@@ -245,6 +281,9 @@ class MainGame:
 
         self.create_my_tank(INITIAL_REBORN)
         self.create_enemy_tank()
+        self.create_steel_wall()
+
+        Music('music/start.wav').play_music()
 
         while True:
             MainGame.clock.tick(60)
@@ -264,10 +303,13 @@ class MainGame:
     def check_collision(self):
         # 子弹和敌方坦克的碰撞
         default_collided = pygame.sprite.collide_rect_ratio(0.8)
+
         hits=groupcollide(self.my_bullets,self.enemy_tanks,True,True,collided=default_collided)
         for bullet,tanks in hits.items():
             for tank in tanks:
                 self.create_explosion(tank)
+
+        groupcollide(self.enemy_bullets,self.my_bullets,True,True)
 
         #我方坦克和子弹的碰撞
         if self.my_tank and self.my_tank.live:
@@ -276,6 +318,12 @@ class MainGame:
                 self.my_tank.live = False
                 self.create_explosion(self.my_tank)
                 self.my_tank_dead_time=pygame.time.get_ticks()
+
+        #子弹与墙的碰撞
+        pygame.sprite.groupcollide(self.walls, self.my_bullets, False, True)
+        pygame.sprite.groupcollide(self.walls, self.enemy_bullets, False, True)
+
+
 
 
 
@@ -295,8 +343,6 @@ class MainGame:
         # 碰撞检测（关键步骤）
         self.check_collision()
 
-        # 移除超出边界的子弹
-        self.cleanup_bullets()
 
     def render(self):
         """渲染所有元素"""
@@ -315,6 +361,10 @@ class MainGame:
         for bullet in self.enemy_bullets:
             bullet.display_bullet(self.window)
 
+        #加载墙壁
+        for wall in self.walls:
+            wall.display_static_entity()
+
         if MainGame.explosions:
             for explosion in MainGame.explosions:
                 if explosion.live:
@@ -327,17 +377,11 @@ class MainGame:
 
         pygame.display.update()
 
-    def cleanup_bullets(self):
-        for bullet in list(self.my_bullets):
-            if not bullet.live:
-                self.my_bullets.remove(bullet)
-        for bullet in list(self.enemy_bullets):
-            if not bullet.live:
-                self.enemy_bullets.remove(bullet)
 
     def create_explosion(self,tank:Tank):
         explode = Explode(tank)
         MainGame.explosions.add(explode)
+        # self.hit_music.play_music()
 
     def create_my_tank(self,initial_reborn):
         self.my_tank = MyTank(initial_reborn[0],initial_reborn[1])
@@ -345,9 +389,15 @@ class MainGame:
 
     def create_enemy_tank(self):
         for i in range(self.enemy_tanks_count):
-            enemy_tank = EnemyTank(random.randint(0, 700), 300 )
+            enemy_tank = EnemyTank(i*120, 300 )
             self.enemy_tanks.add(enemy_tank)
             MainGame.all_collision.add(enemy_tank)
+
+    def create_steel_wall(self):
+        for i in range(10):
+            steel = SteelWall((i*120,400))
+            MainGame.walls.add(steel)
+            MainGame.all_collision.add(steel)
 
     def reborn_tank(self,tank,position):
         tank.live= True
@@ -402,6 +452,7 @@ class MainGame:
             bullet = self.my_tank.shot()
             if bullet:
                 self.my_bullets.add(bullet)
+                self.fire_music.play_music()
 
         self.my_tank_envent()
 
