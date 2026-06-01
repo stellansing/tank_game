@@ -18,6 +18,7 @@ class Bullet(Sprite):
         self.direction=self.owner_tank.direction[0]
         self.rect = self.img.get_rect()
         self.speed = 8
+
         self.live=True
 
         self.bullet_initial_position()

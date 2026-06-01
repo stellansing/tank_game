@@ -62,6 +62,7 @@ class MainGame:
         self.create_my_tank(cfg.INITIAL_REBORN)
         self.create_enemy_tank()
         self.create_steel_wall()
+        self.create_brick_wall()
 
         Music(cfg.AUDIO_PATHS['start']).play_music()
 
@@ -84,24 +85,44 @@ class MainGame:
         self.my_bullets.add(self.my_bullets)
         default_collided = pygame.sprite.collide_rect_ratio(0.8)
 
-        hits=groupcollide(self.my_bullets,self.enemy_tanks,True,True,collided=default_collided)
+        hits=groupcollide(self.my_bullets,self.enemy_tanks,True,False,collided=default_collided)
         for bullet,tanks in hits.items():
             for tank in tanks:
+                tank.hp-=1
+                if tank.hp <= 0:
+                    tank.live = False
+                    tank.kill()
                 self.create_explosion(tank)
 
         groupcollide(self.enemy_bullets,self.my_bullets,True,True)
 
         #我方坦克和子弹的碰撞
         if self.my_tank and self.my_tank.live:
-            hits = spritecollide(self.my_tank, self.enemy_bullets, True,collided=default_collided)
+            hits = spritecollide(self.my_tank, self.enemy_bullets, False,collided=default_collided)
             if hits:
+                self.my_tank.hp-=1
                 self.my_tank.live = False
                 self.create_explosion(self.my_tank)
                 self.my_tank_dead_time=pygame.time.get_ticks()
 
         #子弹与墙的碰撞
-        pygame.sprite.groupcollide(self.walls, self.my_bullets, False, True)
-        pygame.sprite.groupcollide(self.walls, self.enemy_bullets, False, True)
+        hits=pygame.sprite.groupcollide(self.walls, self.my_bullets, False, True)
+        for wall, bullets in hits.items():
+            self.create_bullet_explosion(wall)
+            if wall.type=='brick':
+                wall.hp-=1
+            if wall.hp<=0:
+                wall.live=False
+                wall.kill()
+
+        hits = pygame.sprite.groupcollide(self.walls, self.enemy_bullets, False, True)
+        for wall, bullets in hits.items():
+            self.create_bullet_explosion(wall)
+            if wall.type=='brick':
+                wall.hp-=1
+            if wall.hp<=0:
+                wall.live=False
+                wall.kill()
 
 
 
@@ -130,7 +151,7 @@ class MainGame:
 
         if self.my_tank and self.my_tank.live:
             self.my_tank.display_tank()
-        elif pygame.time.get_ticks()-self.my_tank_dead_time>self.reborn_interval:
+        elif pygame.time.get_ticks()-self.my_tank_dead_time>self.reborn_interval and self.my_tank.hp>=0:#考虑移至更新模块中处理
             self.reborn_tank(self.my_tank,cfg.INITIAL_REBORN)
 
         for enemy in self.enemy_tanks:
@@ -166,6 +187,11 @@ class MainGame:
         MainGame.explosions.add(explode)
         self.hit_music.play_music()
 
+    def create_bullet_explosion(self,wall):
+        explode = BulletExplode(wall)
+        MainGame.explosions.add(explode)
+        self.hit_music.play_music()
+
     def create_my_tank(self,initial_reborn):
         self.my_tank = MyTank((initial_reborn[0],initial_reborn[1]),self.window)
         MainGame.all_collision.add(self.my_tank)
@@ -182,11 +208,18 @@ class MainGame:
             steel.add_to(MainGame.walls)
             steel.add_to(MainGame.all_collision)
 
+    def create_brick_wall(self):
+        for i in range(10):
+            wall = WallGroup((i * 120, 200), 'brick')
+            wall.add_to(MainGame.walls)
+            wall.add_to(MainGame.all_collision)
 
     def reborn_tank(self,tank,position):
-        tank.live= True
         tank.rect.left, tank.rect.top = position
         tank.direction = 'U1'
+        other_tanks = Group([t for t in MainGame.all_collision if t != tank])  # 考虑n*n矩阵，空间换时间
+        if not pygame.sprite.spritecollideany(tank, other_tanks):
+            tank.live= True
 
     def my_tank_move(self,tank,direction):
         old_rect = tank.rect.copy()
@@ -194,7 +227,7 @@ class MainGame:
 
         other_tanks = Group([t for t in MainGame.all_collision if t != tank])  # 考虑n*n矩阵，空间换时间
         if pygame.sprite.spritecollideany(tank, other_tanks):
-            tank.rect= old_rect
+            tank.rect = old_rect
 
     def enemy_tank_move(self,tank):
         old_rect = tank.rect.copy()

@@ -22,7 +22,7 @@ class Tank(Sprite):
         self.animation_timer = 0
         self.animation_interval = 100
 
-        self.hp=1000
+        self.hp=None
         self.live = True
 
         self.speed = 2
@@ -78,6 +78,8 @@ class MyTank(Tank):
         self.image = self.images[self.direction]
         self.rect = self.image.get_rect()
         self.rect.left, self.rect.top = position
+
+        self.hp = 3
 class EnemyTank(Tank):
     def __init__(self, position,window):
         super().__init__(position,window)
@@ -88,6 +90,7 @@ class EnemyTank(Tank):
         self.rect = self.image.get_rect()
         self.rect.left, self.rect.top = position
 
+        self.hp = 1
         self.step=50
 
     def rand_direction(self)->str:

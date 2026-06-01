@@ -81,6 +81,12 @@ class TankImageCache:
         return None
 
     @classmethod
+    def get_tank_width(cls):
+        if 'player1' in cls._cache:
+            return cls._cache['player1'][0]['U1'].get_width()
+        return 0
+
+    @classmethod
     def get_enemy_tank_image(cls, tank_type, level):
         if tank_type in cls._cache and level < len(cls._cache[tank_type]):
             return cls._cache[tank_type][level]

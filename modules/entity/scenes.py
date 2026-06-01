@@ -8,6 +8,8 @@ class StaticEntity(Sprite):
         self.image = None
         self.rect = None
         self.position = position
+
+        self.hp = None
         self.live = True
 
     def display_static_entity(self,window):
@@ -15,15 +17,21 @@ class StaticEntity(Sprite):
 class SteelWall(StaticEntity):
     def __init__(self,position: tuple):
         super().__init__(position)
+        self.type = 'steel'
         self.image = pygame.image.load(cfg.SCENE_IMAGE_PATHS['iron'])
         self.rect = self.image.get_rect()
         self.rect.left, self.rect.top = position
+
+        self.hp=1
 class BrickWall(StaticEntity):
     def __init__(self,position: tuple):
         super().__init__(position)
+        self.type = 'brick'
         self.image = pygame.image.load(cfg.SCENE_IMAGE_PATHS['brick'])
         self.rect = self.image.get_rect()
         self.rect.left, self.rect.top = position
+
+        self.hp=1
 class WallGroup:
     def __init__(self,positions: tuple,wall_class:str):
         self.left, self.top = positions
