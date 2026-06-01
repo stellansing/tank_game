@@ -3,13 +3,13 @@ import os
 
 
 '''字体'''
-FONTPATH = os.path.join(os.getcwd(), 'resources/font/font.ttf')
+FONTPATH = os.path.join(os.getcwd(), 'resources/font/simsun.ttf')
 '''图片'''
 BULLET_IMAGE_PATHS = {
-					  'up': os.path.join(os.getcwd(), 'resources/images/bullet/bullet_up.png'),
-					  'down': os.path.join(os.getcwd(), 'resources/images/bullet/bullet_down.png'),
-					  'left': os.path.join(os.getcwd(), 'resources/images/bullet/bullet_left.png'),
-					  'right': os.path.join(os.getcwd(), 'resources/images/bullet/bullet_right.png')
+					  'U': os.path.join(os.getcwd(), 'resources/images/bullet/bullet_up.png'),
+					  'D': os.path.join(os.getcwd(), 'resources/images/bullet/bullet_down.png'),
+					  'L': os.path.join(os.getcwd(), 'resources/images/bullet/bullet_left.png'),
+					  'R': os.path.join(os.getcwd(), 'resources/images/bullet/bullet_right.png')
 					  }
 ENEMY_TANK_IMAGE_PATHS = {
 							'1': [os.path.join(os.getcwd(), 'resources/images/enemyTank/enemy_1_0.png'),
@@ -78,12 +78,21 @@ AUDIO_PATHS = {
 				'hit': os.path.join(os.getcwd(), 'resources/audios/hit.wav'),
 				'start': os.path.join(os.getcwd(), 'resources/audios/start.wav')
 			}
-'''屏幕'''
+
+SCENES_SIZE={}
+'''初始化常量'''
 WIDTH = 630
 HEIGHT = 630
-BORDER_LEN = 3
-GRID_SIZE = 24
-PANEL_WIDTH = 150
+# BORDER_LEN = 3
+# GRID_SIZE = 24
+# PANEL_WIDTH = 150
+
+
+INITIAL_REBORN=(300,300)
+WINDOW_COLOR=(0,0,0)
+REBORN_INTERVAL = 300
+INITIAL_TICK = 60
+
 TITLE = '坦克大战'
 '''关卡'''
-LEVELFILEDIR = os.path.join(os.getcwd(), 'modules/levels')
+# LEVELFILEDIR = os.path.join(os.getcwd(), 'modules/levels')

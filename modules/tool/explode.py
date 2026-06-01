@@ -1,13 +1,11 @@
+from pygame.sprite import Sprite
+from modules.tool.time import *
+from globalCache import *
+
 class Explode(Sprite):
     def __init__(self, tank):
         super().__init__()
-        self.images=[
-            pygame.image.load('img/blast0.gif'),
-            pygame.image.load('img/blast1.gif'),
-            pygame.image.load('img/blast2.gif'),
-            pygame.image.load('img/blast3.gif'),
-            pygame.image.load('img/blast4.gif'),
-        ]
+        self.images= OtherImageCache.get_boom_image()
         self.image = self.images[0]
         self.rect=self.image.get_rect()
         self.rect.center = tank.rect.center
@@ -18,12 +16,12 @@ class Explode(Sprite):
         self.total_duration = 300  # 爆炸总时长（毫秒）
         self.frame_duration = self.total_duration // len(self.images)  # 每帧持续时间
         self.time_computer = TimeComputer(self.frame_duration)
-    def display_explode(self):
+    def display_explode(self,window):
         if self.step < len(self.images):
             if self.time_computer.set_interval():
                 self.image = self.images[self.step]
                 self.step += 1
-            MainGame.window.blit(self.image, self.rect)
+            window.blit(self.image, self.rect)
         else:
             self.step = 0
             self.live = False

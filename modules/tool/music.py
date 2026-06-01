@@ -1,3 +1,5 @@
+import pygame
+
 class Music:
     pygame.mixer.init()
     def __init__(self,music_file, volume=0.1):

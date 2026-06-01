@@ -1,12 +1,26 @@
+import pygame
+from pygame.sprite import Sprite
+
+import cfg
+
+
 class Bullet(Sprite):
     def __init__(self,tank):
         super().__init__()
         self.owner_tank = tank
-        self.img = pygame.image.load('img/enemymissile.gif')
-        self.direction=tank.direction
+        self.images = {
+            'U': pygame.image.load(cfg.BULLET_IMAGE_PATHS['U']),
+            'D': pygame.image.load(cfg.BULLET_IMAGE_PATHS['D']),
+            'L': pygame.image.load(cfg.BULLET_IMAGE_PATHS['L']),
+            'R': pygame.image.load(cfg.BULLET_IMAGE_PATHS['R'])
+        }
+        self.img = self.images[self.owner_tank.direction[0]]
+        self.direction=self.owner_tank.direction[0]
         self.rect = self.img.get_rect()
         self.speed = 8
         self.live=True
+
+        self.bullet_initial_position()
 
     def bullet_initial_position(self):
         if self.direction == 'U':

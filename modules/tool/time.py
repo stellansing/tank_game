@@ -1,4 +1,7 @@
+import pygame
+
 class TimeComputer:
+
     def __init__(self,interval):
         self.last_time = pygame.time.get_ticks()
         self.interval = interval

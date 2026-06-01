@@ -1,103 +1,112 @@
+import pygame
+from pygame.sprite import Sprite,Group
+from modules.tool.time import *
+from modules.entity.bullet import *
+from globalCache import TankImageCache
+import random
+
 class Tank(Sprite):
 
 
-    def __init__(self,left,top)->None:
+    def __init__(self,position,window)->None:
         super().__init__()
+        #在子类中进行具体的实现
+        self.owner_window = window
+
         self.images = None
         self.direction = None
         self.image = None
         self.rect = None
 
-        self.blood=1000
+        self.current_frame = 0
+        self.animation_timer = 0
+        self.animation_interval = 100
+
+        self.hp=1000
         self.live = True
 
         self.speed = 2
         self.shot_speed = 500
 
-        self.time_computer = TimeComputer(self.shot_speed)
+        self.shot_time_computer = TimeComputer(self.shot_speed)
+        self.tank_animation_time_computer = TimeComputer(self.animation_interval)
+
 
     def display_tank(self):
+
         self.image = self.images[self.direction]
-        MainGame.window.blit(self.image, self.rect)
+        self.owner_window.blit(self.image, self.rect)
+
+    def update_animation(self):
+        if self.tank_animation_time_computer.set_interval():
+            self.current_frame = 1 - self.current_frame
 
     def speed_change(self, change_direction,accelerate):
         pass
 
     def move(self,direction):
-        old_rect = self.rect.copy()
 
-        self.direction = direction
-        if self.direction == 'L':
+        if direction == 'L':
             if self.rect.left > 0:
                 self.rect = self.rect.move(-self.speed, 0)
-        elif self.direction == 'R':
-            if self.rect.right < MainGame.window.get_rect().right:
+        elif direction == 'R':
+            if self.rect.right < self.owner_window.get_rect().right:
                 self.rect = self.rect.move(self.speed, 0)
-        elif self.direction == 'U':
+        elif direction == 'U':
             if self.rect.top > 0:
                 self.rect = self.rect.move(0, -self.speed)
-        elif self.direction == 'D':
-            if self.rect.bottom < MainGame.window.get_rect().bottom:
+        elif direction == 'D':
+            if self.rect.bottom < self.owner_window.get_rect().bottom:
                 self.rect = self.rect.move(0, self.speed)
 
-        other_tanks = Group([t for t in MainGame.all_collision if t != self])#考虑n*n矩阵，空间换时间
-        if pygame.sprite.spritecollideany(self,other_tanks):
-            # 发生碰撞，恢复位置和方向
-            self.rect = old_rect
-            return False
-        return True
+
+        self.direction = f"{direction}{self.current_frame + 1}"
+        self.update_animation()
 
     def shot(self):
-        if not self.time_computer.set_interval():
-            return None
-        bullet = Bullet(self)
-        bullet.bullet_initial_position()
-        return bullet
+        if self.shot_time_computer.set_interval():
+            bullet = Bullet(self)
+            return bullet
+        return None
 
 class MyTank(Tank):
-    def __init__(self,left,top):
-        super().__init__(left,top)
-        self.images = {
-            'U': pygame.image.load('img/p1tankU.gif'),
-            'D': pygame.image.load('img/p1tankD.gif'),
-            'L': pygame.image.load('img/p1tankL.gif'),
-            'R': pygame.image.load('img/p1tankR.gif')
-        }
-        self.direction = 'U'
+    def __init__(self,position,window):
+        super().__init__(position,window)
+        self.player_key='player1'
+        self.images = TankImageCache.get_player_tank_image(self.player_key,0)
+        self.direction = 'U1'
         self.image = self.images[self.direction]
         self.rect = self.image.get_rect()
-        self.rect.center = [left, top]
+        self.rect.left, self.rect.top = position
 class EnemyTank(Tank):
-    def __init__(self, left,top):
-        super().__init__(left,top)
-        self.images = {
-            'U': pygame.image.load('img/enemy1U.gif'),
-            'D': pygame.image.load('img/enemy1D.gif'),
-            'L': pygame.image.load('img/enemy1L.gif'),
-            'R': pygame.image.load('img/enemy1R.gif')
-        }
+    def __init__(self, position,window):
+        super().__init__(position,window)
+        self.enemy_type = '1'
+        self.images = TankImageCache.get_enemy_tank_image(self.enemy_type,0)
         self.direction = self.rand_direction()
-        self.image = self.images[self.direction]
+        self.image = self.images[f"{self.direction}1"]
         self.rect = self.image.get_rect()
-        self.rect.center = [left, top]
+        self.rect.left, self.rect.top = position
 
         self.step=50
 
     def rand_direction(self)->str:
         choice=random.randint(1,4)
+        rand_direction = None
         if choice == 1:
-            return 'L'
+            rand_direction = 'L'
         elif choice == 2:
-            return 'R'
+            rand_direction = 'R'
         elif choice == 3:
-            return 'U'
+            rand_direction = 'U'
         elif choice == 4:
-            return 'D'
+            rand_direction = 'D'
+        return rand_direction
 
     def rand_move(self):
         if self.step <= 0:
             self.step = 50
-            self.direction = self.rand_direction()
+            self.move(self.rand_direction())
         else:
-            self.move(self.direction)
+            self.move(self.direction[0])
             self.step -= 1
