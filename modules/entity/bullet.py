@@ -43,14 +43,14 @@ class Bullet(Sprite):
     def display_bullet(self, window):
         window.blit(self.img, self.rect)
 
-    def move(self, window):
+    def move(self,game_window_size):
         if self.direction == 'U':
             if self.rect.top > 0:
                 self.rect = self.rect.move(0, -self.speed)
             else:
                 self.kill()
         elif self.direction == 'D':
-            if self.rect.bottom < window.get_rect().bottom:
+            if self.rect.bottom < game_window_size[1]:
                 self.rect = self.rect.move(0, self.speed)
             else:
                 self.kill()
@@ -60,7 +60,7 @@ class Bullet(Sprite):
             else :
                 self.kill()
         elif self.direction == 'R':
-            if self.rect.right < window.get_rect().right:
+            if self.rect.right < game_window_size[0]:
                 self.rect = self.rect.move(self.speed, 0)
             else:
                 self.kill()

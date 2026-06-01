@@ -8,10 +8,11 @@ import random
 class Tank(Sprite):
 
 
-    def __init__(self,position,window)->None:
+    def __init__(self,position,window,game_window_size:tuple)->None:
         super().__init__()
         #在子类中进行具体的实现
         self.owner_window = window
+        self.game_window_size = game_window_size
 
         self.images = None
         self.direction = None
@@ -26,7 +27,7 @@ class Tank(Sprite):
         self.live = True
 
         self.speed = 2
-        self.shot_speed = 500
+        self.shot_speed = 2000
 
         self.shot_time_computer = TimeComputer(self.shot_speed)
         self.tank_animation_time_computer = TimeComputer(self.animation_interval)
@@ -50,13 +51,13 @@ class Tank(Sprite):
             if self.rect.left > 0:
                 self.rect = self.rect.move(-self.speed, 0)
         elif direction == 'R':
-            if self.rect.right < self.owner_window.get_rect().right:
+            if self.rect.right < self.game_window_size[0]:
                 self.rect = self.rect.move(self.speed, 0)
         elif direction == 'U':
             if self.rect.top > 0:
                 self.rect = self.rect.move(0, -self.speed)
         elif direction == 'D':
-            if self.rect.bottom < self.owner_window.get_rect().bottom:
+            if self.rect.bottom < self.game_window_size[1]:
                 self.rect = self.rect.move(0, self.speed)
 
 
@@ -70,8 +71,8 @@ class Tank(Sprite):
         return None
 
 class MyTank(Tank):
-    def __init__(self,position,window):
-        super().__init__(position,window)
+    def __init__(self,position,window,game_window_size:tuple):
+        super().__init__(position,window,game_window_size)
         self.player_key='player1'
         self.images = TankImageCache.get_player_tank_image(self.player_key,0)
         self.direction = 'U1'
@@ -81,8 +82,9 @@ class MyTank(Tank):
 
         self.hp = 3
 class EnemyTank(Tank):
-    def __init__(self, position,window):
-        super().__init__(position,window)
+    def __init__(self, position,window,game_window_size:tuple):
+        super().__init__(position,window,game_window_size)
+
         self.enemy_type = '1'
         self.images = TankImageCache.get_enemy_tank_image(self.enemy_type,0)
         self.direction = self.rand_direction()
@@ -91,7 +93,8 @@ class EnemyTank(Tank):
         self.rect.left, self.rect.top = position
 
         self.hp = 1
-        self.step=50
+        self.step=30
+        self.last_position = self.rect.topleft
 
     def rand_direction(self)->str:
         choice=random.randint(1,4)
@@ -107,9 +110,14 @@ class EnemyTank(Tank):
         return rand_direction
 
     def rand_move(self):
+
+        if self.rect.topleft != self.last_position:
+            self.last_position = self.rect.topleft
+        else:
+            self.step-= 1
+
         if self.step <= 0:
             self.step = 50
             self.move(self.rand_direction())
         else:
             self.move(self.direction[0])
-            self.step -= 1

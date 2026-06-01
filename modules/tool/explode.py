@@ -26,12 +26,12 @@ class Explode(Sprite):
             self.step = 0
             self.live = False
 class BulletExplode(Sprite):
-    def __init__(self, tank):
+    def __init__(self, bullet):
         super().__init__()
         self.images= OtherImageCache.get_boom_image()[0:3]
         self.image = self.images[0]
         self.rect=self.image.get_rect()
-        self.rect.center = tank.rect.center
+        self.rect.center = bullet.rect.center
         self.step=0
 
         self.live=True

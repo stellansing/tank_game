@@ -79,13 +79,14 @@ AUDIO_PATHS = {
 				'start': os.path.join(os.getcwd(), 'resources/audios/start.wav')
 			}
 
+
 SCENES_SIZE={}
 '''初始化常量'''
-WIDTH = 630
-HEIGHT = 630
+WIDTH = 624
+HEIGHT = 624
 # BORDER_LEN = 3
 # GRID_SIZE = 24
-# PANEL_WIDTH = 150
+PANEL_WIDTH = 100
 
 
 INITIAL_REBORN=(300,300)
@@ -95,4 +96,4 @@ INITIAL_TICK = 60
 
 TITLE = '坦克大战'
 '''关卡'''
-# LEVELFILEDIR = os.path.join(os.getcwd(), 'modules/levels')
+LEVELFILEDIR = os.path.join(os.getcwd(), 'modules/levels')
