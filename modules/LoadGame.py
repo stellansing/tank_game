@@ -1,5 +1,7 @@
 import pygame
+from pygame.examples.cursors import image
 from pygame.sprite import groupcollide,spritecollide
+import os
 
 from modules.tool.music import *
 from modules.entity.tank import *
@@ -27,15 +29,20 @@ class MainGame:
 
 
     def __init__(self):
+        self.remaining_enemies = None
+        self.panel_x = None
         self.total_enemy_tanks = None
+        self.remaining_enemies = self.total_enemy_tanks
         self.level_config = None
         self.max_enemy_tanks = None
         self.enemy_tanks_positions = None
         self.reborn_position = cfg.INITIAL_REBORN
+        self.teammate_reborn_position = cfg.INITIAL_REBORN
 
+        self.game_lose = False
+        self.game_win = False
 
-        pygame.display.init()
-        self.init_image_size()
+        self.is_multiplayer = False
 
         self.key_order = []
         self.my_tank_dead_time=0
@@ -57,7 +64,8 @@ class MainGame:
             scene_sizes[key] = img.get_size()
         cfg.SCENES_SIZE = scene_sizes
 
-    def start_game(self):
+    def start_game(self, level='1'):
+        """启动游戏，可指定关卡"""
         MainGame.window = pygame.display.set_mode((cfg.WIDTH+cfg.PANEL_WIDTH, cfg.HEIGHT))
         pygame.font.init()
         pygame.display.set_caption(cfg.TITLE)
@@ -67,7 +75,8 @@ class MainGame:
 
         MainGame.clock = pygame.time.Clock()
 
-        self.load_lvl('1')
+        # 加载指定关卡
+        self.load_lvl(str(level))
         Music(cfg.AUDIO_PATHS['start']).play_music()
         self.create_all_players()
 
@@ -82,10 +91,24 @@ class MainGame:
             pygame.display.update()
 
     def load_lvl(self, level):
-        path = cfg.LEVELFILEDIR + '/' + level + '.lvl'
+        """加载关卡文件"""
+        path = cfg.LEVELFILEDIR + '/' + str(level) + '.lvl'
+        
+        # 检查文件是否存在
+        if not os.path.exists(path):
+            print(f"关卡文件不存在: {path}，使用默认关卡1")
+            path = cfg.LEVELFILEDIR + '/1.lvl'
 
         with open(path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
+
+        # 清除现有对象（重新加载关卡时）
+        MainGame.walls.empty()
+        MainGame.enemy_tanks.empty()
+        MainGame.all_collision.empty()
+        MainGame.my_bullets.empty()
+        MainGame.enemy_bullets.empty()
+        MainGame.explosions.empty()
 
         # 解析配置参数
         config = {}
@@ -124,28 +147,23 @@ class MainGame:
                     positions.append((x*self.cell_len, y*self.cell_len))
                 config['enemy_tank_pos'] = positions
             elif line and not line.startswith('#') and not line.startswith('%'):
-                print('加载第'+str(num_row)+'行数据')
                 for row_i, elem in enumerate(line.split(' ')):
                     self.create_element((row_i*self.cell_len, num_row*self.cell_len), elem)
                 num_row += 1
 
         # 保存关卡配置
         self.level_config = config
+        print(f"成功加载关卡 {level}")
         print(config)
 
         # 更新敌方坦克数量
         self.max_enemy_tanks = config.get('max_enemy_num', 6)
         self.total_enemy_tanks = config.get('total_enemy_num', 12)
-        self.reborn_position =(config.get('player_tank_pos')[0][0]*self.cell_len, config.get('player_tank_pos')[0][1]*self.cell_len)
-        self.enemy_tanks_positions = config.get('enemy_tank_pos')
-
-        # 清除现有对象
-        # MainGame.walls.empty()
-        # MainGame.enemy_tanks.empty()
-        # MainGame.all_collision.empty()
-        # MainGame.my_bullets.empty()
-        # MainGame.enemy_bullets.empty()
-        # MainGame.explosions.empty()
+        self.remaining_enemies = self.total_enemy_tanks
+        player_positions = config.get('player_tank_pos', [(8, 24), (16, 24)])
+        self.reborn_position = (player_positions[0][0]*self.cell_len, player_positions[0][1]*self.cell_len)
+        self.teammate_reborn_position = (player_positions[1][0]*self.cell_len, player_positions[1][1]*self.cell_len)
+        self.enemy_tanks_positions = config.get('enemy_tank_pos', [(0, 0), (288, 0), (576, 0)])
 
 
 
@@ -159,7 +177,10 @@ class MainGame:
                 tank.hp-=1
                 if tank.hp <= 0:
                     tank.live = False
+                    self.remaining_enemies -= 1
                     tank.kill()
+                    if self.remaining_enemies <= 0:
+                        self.game_win = True
                 self.create_explosion(tank)
 
         groupcollide(self.enemy_bullets,self.my_bullets,True,True)
@@ -209,6 +230,9 @@ class MainGame:
         for bullet in self.enemy_bullets:
             bullet.move(self.window_size)
 
+        #更新菜单
+        self.menu()
+
         # 敌方坦克移动和射击
         self.enemy_tank_event()
 
@@ -221,12 +245,19 @@ class MainGame:
 
     def render(self):
         """渲染所有元素"""
-        self.window.fill(cfg.WINDOW_COLOR)
+        self.window.fill((0, 0, 0))
+        # 加载并显示背景图片
+        background_image = pygame.image.load(cfg.OTHER_IMAGE_PATHS['background'])
+        self.window.blit(background_image, (0, 0))
+
+        #绘制信息面板
 
         if self.my_tank and self.my_tank.live:
             self.my_tank.display_tank()
         elif pygame.time.get_ticks()-self.my_tank_dead_time>self.reborn_interval and self.my_tank.hp>=0:#考虑移至更新模块中处理
             self.reborn_tank(self.my_tank,self.reborn_position)
+        elif self.my_tank.hp<0:
+            self.game_lose= True
 
         for enemy in self.enemy_tanks:
             enemy.display_tank()
@@ -249,14 +280,25 @@ class MainGame:
                     ready_remove.append(explosion)
             MainGame.explosions = Group([e for e in MainGame.explosions if e not in ready_remove])
 
-        # 显示血量等UI
-        text = self.get_text_surface(f"敌人数: {len(self.enemy_tanks)}")
-        self.window.blit(text, (10, 10))
+        enemy_text = self.get_text_surface(f"敌人: {self.remaining_enemies}",20)
+        self.window.blit(enemy_text, (self.panel_x, 10))
+
+        if self.my_tank:
+            hp_text = self.get_text_surface(f"血量: {self.my_tank.hp}",20)
+            self.window.blit(hp_text, (self.panel_x, 50))
+
+        self.game_over_check()
 
         pygame.display.update()
 
     def menu(self):
-        pass
+        # 显示右侧信息面板
+        self.panel_x = cfg.WIDTH + 10
+
+        # 剩余敌人数量
+        # self.remaining_enemies = self.total_enemy_tanks - self.total_created_enemy_tanks
+
+
 
     def create_element(self,position,type):
         if type=='B':
@@ -283,17 +325,20 @@ class MainGame:
 
     def create_all_players(self):
         self.create_my_tank(self.reborn_position)
+        if self.is_multiplayer:
+            self.create_teammate_tank(self.teammate_reborn_position)
     def create_my_tank(self,initial_reborn):
         self.my_tank = MyTank((initial_reborn[0],initial_reborn[1]),self.window,self.window_size)
         MainGame.all_collision.add(self.my_tank)
-
+    def create_teammate_tank(self,teammate_reborn):
+        self.my_tank = MyTank((teammate_reborn[0], teammate_reborn[1]), self.window, self.window_size)
+        MainGame.all_collision.add(self.my_tank)
 
     def random_create_enemy_tanks(self):
         if len(self.enemy_tanks)<self.max_enemy_tanks and self.total_created_enemy_tanks<self.total_enemy_tanks:
             position = random.choice(self.enemy_tanks_positions)
             self.create_enemy_tank(position)
     def create_enemy_tank(self,position):
-        print("创建敌方坦克"+str(position))
         left, top = position[0], position[1]
         enemy_tank = EnemyTank((left,top),self.window,self.window_size)
         other_tanks = Group([t for t in MainGame.all_collision if t != enemy_tank])  # 考虑n*n矩阵，空间换时间
@@ -303,14 +348,12 @@ class MainGame:
             self.total_created_enemy_tanks+=1
 
     def create_steel_wall(self,position):
-        print("创建铁墙"+str(position))
         left, top = position[0], position[1]
         wall = SteelWall((left, top))
         MainGame.walls.add(wall)
         MainGame.all_collision.add(wall)
 
     def create_brick_wall(self,position):
-        print("创建砖墙"+str(position))
         left, top = position[0], position[1]
         wall = BrickWall((left, top))
         MainGame.walls.add(wall)
@@ -391,9 +434,12 @@ class MainGame:
             last_direction = self.key_order[-1]
             self.my_tank_move(self.my_tank, last_direction)
 
-    def get_text_surface(self, text):
+    def teammate_tank_event(self):
+        pass
 
-        my_font = pygame.font.Font(cfg.FONTPATH, 25)
+    def get_text_surface(self, text,size=25):
+
+        my_font = pygame.font.Font(cfg.FONTPATH, size)
         text_surface = my_font.render(text, True, pygame.Color(255, 0, 0))
         return text_surface
 
@@ -428,7 +474,17 @@ class MainGame:
                 self.my_bullets.add(bullet)
                 self.fire_music.play_music()
 
-
+    def game_over_check(self):
+        if self.game_win:
+            win_text = self.get_text_surface("You Win",50)
+            self.window.blit(win_text, (self.window_size[0] / 2 - win_text.get_width() / 2, self.window_size[1] / 2 - win_text.get_height() / 2))
+        elif self.game_lose:
+            #加载失败图片
+            game_over_image = pygame.image.load(cfg.OTHER_IMAGE_PATHS['gameover'])
+            logo_width = 300
+            logo_height = int(game_over_image.get_height() * (logo_width / game_over_image.get_width()))
+            game_over_image = pygame.transform.scale(game_over_image, (logo_width, logo_height))
+            self.window.blit(game_over_image, (self.window_size[0] / 2 - game_over_image.get_width() / 2, self.window_size[1] / 2 - game_over_image.get_height() / 2))
     def end_game(self):
         print("退出游戏")
         pygame.quit()
