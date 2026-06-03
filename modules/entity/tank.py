@@ -8,11 +8,13 @@ import random
 class Tank(Sprite):
 
 
-    def __init__(self,position,window,game_window_size:tuple)->None:
+    def __init__(self,position,window,game_window_size:tuple,tank_id)->None:
         super().__init__()
         #在子类中进行具体的实现
         self.owner_window = window
         self.game_window_size = game_window_size
+
+        self.id = tank_id
 
         self.images = None
         self.direction = None
@@ -71,8 +73,8 @@ class Tank(Sprite):
         return None
 
 class MyTank(Tank):
-    def __init__(self,position,window,game_window_size:tuple):
-        super().__init__(position,window,game_window_size)
+    def __init__(self,position,window,game_window_size:tuple,tank_id):
+        super().__init__(position,window,game_window_size,tank_id)
         self.player_key='player1'
         self.images = TankImageCache.get_player_tank_image(self.player_key,0)
         self.direction = 'U1'
@@ -82,8 +84,8 @@ class MyTank(Tank):
 
         self.hp = 3
 class EnemyTank(Tank):
-    def __init__(self, position,window,game_window_size:tuple):
-        super().__init__(position,window,game_window_size)
+    def __init__(self, position, window, game_window_size:tuple, tank_id):
+        super().__init__(position, window, game_window_size, tank_id)
 
         self.enemy_type = '1'
         self.images = TankImageCache.get_enemy_tank_image(self.enemy_type,0)

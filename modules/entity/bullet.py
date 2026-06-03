@@ -5,7 +5,7 @@ import cfg
 
 
 class Bullet(Sprite):
-    def __init__(self,tank):
+    def __init__(self,tank,bullet_id):
         super().__init__()
         self.owner_tank = tank
         self.images = {
@@ -19,6 +19,7 @@ class Bullet(Sprite):
         self.rect = self.img.get_rect()
         self.speed = 8
 
+        self.id=bullet_id
         self.live=True
 
         self.bullet_initial_position()

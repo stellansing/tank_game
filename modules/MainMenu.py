@@ -177,6 +177,136 @@ class LevelSelectMenu:
         exit()
 
 
+class MultiplayerMenu:
+    """多人游戏菜单类"""
+    
+    def __init__(self):
+        self.running = None
+        pygame.display.init()
+        pygame.font.init()
+        
+        self.window_size = (cfg.WIDTH, cfg.HEIGHT)
+        self.window = pygame.display.set_mode(self.window_size)
+        pygame.display.set_caption(cfg.TITLE + " - 多人游戏")
+        
+        self.clock = pygame.time.Clock()
+        
+        # 标题
+        title_font = pygame.font.Font(cfg.FONTPATH, 36)
+        self.title_surface = title_font.render("多人游戏", True, (255, 255, 255))
+        self.title_rect = self.title_surface.get_rect(center=(self.window_size[0] // 2, 50))
+        
+        # 创建按钮
+        button_width = 200
+        button_height = 60
+        center_x = self.window_size[0] // 2
+        start_y = 150
+        button_spacing = 20
+        
+        self.create_host_button = Button(
+            center_x - button_width // 2,
+            start_y,
+            button_width,
+            button_height,
+            "创建房间",
+            cfg.FONTPATH,
+            font_size=24,
+            color=(255, 255, 255),
+            hover_color=(255, 255, 0),
+            bg_color=(50, 50, 50)
+        )
+        
+        self.join_host_button = Button(
+            center_x - button_width // 2,
+            start_y + button_height + button_spacing,
+            button_width,
+            button_height,
+            "加入房间",
+            cfg.FONTPATH,
+            font_size=24,
+            color=(255, 255, 255),
+            hover_color=(255, 255, 0),
+            bg_color=(50, 50, 50)
+        )
+        
+        self.back_button = Button(
+            center_x - button_width // 2,
+            start_y + (button_height + button_spacing) * 2 + 20,
+            button_width,
+            button_height,
+            "返回",
+            cfg.FONTPATH,
+            font_size=24,
+            color=(255, 255, 255),
+            hover_color=(255, 255, 0),
+            bg_color=(80, 50, 50)
+        )
+        
+        self.selected_mode = None  # 'host' or 'join'
+    
+    def run(self):
+        """运行多人游戏菜单"""
+        self.running = True
+        while self.running:
+            self.clock.tick(60)
+            self.update()
+            self.render()
+        
+        return self.selected_mode
+    
+    def render(self):
+        """渲染多人游戏界面"""
+        self.window.fill(cfg.WINDOW_COLOR)
+        
+        # 绘制标题
+        self.window.blit(self.title_surface, self.title_rect)
+        
+        # 绘制按钮
+        self.create_host_button.draw(self.window)
+        self.join_host_button.draw(self.window)
+        self.back_button.draw(self.window)
+        
+        pygame.display.update()
+    
+    def update(self):
+        """更新状态"""
+        self.get_event()
+    
+    def get_event(self):
+        """处理事件"""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.quit_game()
+            
+            elif event.type == pygame.MOUSEMOTION:
+                self.create_host_button.check_hover(event.pos)
+                self.join_host_button.check_hover(event.pos)
+                self.back_button.check_hover(event.pos)
+            
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    if self.create_host_button.is_clicked(event.pos):
+                        print("创建房间")
+                        self.selected_mode = 'host'
+                        self.running = False
+                    
+                    elif self.join_host_button.is_clicked(event.pos):
+                        print("加入房间")
+                        self.selected_mode = 'join'
+                        self.running = False
+                    
+                    elif self.back_button.is_clicked(event.pos):
+                        print("返回主菜单")
+                        self.running = False
+    
+    def quit_game(self):
+        """退出游戏"""
+        self.running = False
+        print("退出游戏")
+        pygame.quit()
+        exit()
+
+
 class MainMenu:
     """主菜单类"""
     
@@ -295,9 +425,15 @@ class MainMenu:
                             game.start_game(str(selected_level))
 
                     elif self.multi_player_button.is_clicked(event.pos):
-                        # 点击多人游戏，暂未实现
-                        print("多人游戏功能暂未实现")
-                        pass
+                        # 点击多人游戏，进入多人游戏菜单
+                        print("进入多人游戏菜单")
+                        multiplayer_menu = MultiplayerMenu()
+                        selected_mode = multiplayer_menu.run()
+                        
+                        if selected_mode is not None:
+                            # 开始多人游戏
+                            game = MainGame()
+                            game.start_multiplayer_game(selected_mode)
 
     def quit_game(self):
         self.running = False
