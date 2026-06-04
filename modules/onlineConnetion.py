@@ -7,11 +7,12 @@ import pygame
 class UDPNetwork:
     """UDP局域网联机网络类"""
     
-    def __init__(self, port=12345):
+    def __init__(self,level,port=12345):
         self.port = port
         self.socket = None
         self.is_host = False
         self.connected = False
+        self.level = level
 
 
         self.is_update = False
@@ -70,6 +71,7 @@ class UDPNetwork:
             
         try:
             # 如果没有指定主机IP，使用广播查找
+            host_ips=None
             if host_ip is None:
                 host_ips = self._find_host()
 
@@ -77,9 +79,10 @@ class UDPNetwork:
                     print("未找到可用的主机")
                     return False
                 else:
+                    host_ip = host_ips[0][0]
                     print(f"已找到主机: {host_ip}")
-                    host_ip = host_ips[0]
 
+            self.level = host_ips[0][1]
             self.local_address = (host_ip, self.port)
             self.connected = True
             self.running = True
@@ -121,7 +124,7 @@ class UDPNetwork:
                     if response.get('type') == 'host_response':
                         host_ip = addr[0]
                         if host_ip not in hosts:  # 避免重复添加
-                            hosts.append(host_ip)
+                            hosts.append([host_ip,response.get('level')])
                             print(f"找到主机: {host_ip}")
                 except socket.timeout:
                     break
@@ -152,7 +155,7 @@ class UDPNetwork:
         
         if msg_type == 'host_query' and self.is_host:
             # 响应主机查询
-            self.send_message({'type': 'host_response'}, address)
+            self.send_message({'type': 'host_response','level': self.level}, address)
             
         elif msg_type == 'join_request' and self.is_host:
             # 处理加入请求
@@ -229,11 +232,12 @@ class UDPNetwork:
 
 class ServerHandler:
     """服务器处理类"""
-    def __init__(self, port=5000):
+    def __init__(self, level,port=5000):
         self.is_connected = False
-        self.network = UDPNetwork(port)
+        self.network = UDPNetwork(level,port)
         self.is_connected=self.network.create_host()
         self.connected_address=self.network.connected_address
+        self.level=level
 
 
     def run(self):
@@ -265,10 +269,22 @@ class ServerHandler:
             return None
         
         return {
+            'type': 'tank',
             'id': tank.id,
             'position': (tank.rect.left, tank.rect.top),
             'live': tank.live,
             'direction': tank.direction
+        }
+
+    def serialize_scenes_data(self, scenes):
+        if not scenes:
+            return None
+
+        return {
+            'type': 'scenes',
+            'id': scenes.id,
+            'position': (scenes.rect.left, scenes.rect.top),
+            'live': scenes.live,
         }
 
     def serialize_bullet_data(self, bullet):
@@ -286,3 +302,10 @@ class ServerHandler:
     def disconnect(self):
         """断开连接"""
         self.network.disconnect()
+
+    def create_host(self):
+        return self.network.create_host()
+    def join_game(self):
+        if_join=self.network.join_game()
+        self.level=self.network.level
+        return if_join

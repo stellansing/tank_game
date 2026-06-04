@@ -65,3 +65,6 @@ class Bullet(Sprite):
                 self.rect = self.rect.move(self.speed, 0)
             else:
                 self.kill()
+
+    def dead(self):
+        self.live=False

@@ -1,6 +1,6 @@
 import pygame
 from pygame.examples.cursors import image
-from pygame.sprite import groupcollide,spritecollide
+from pygame.sprite import groupcollide, spritecollide
 import os
 
 from modules.tool.music import *
@@ -11,12 +11,501 @@ from modules.entity.bullet import *
 from modules.onlineConnetion import *
 import cfg
 
+class NormalVariables:
+    def __init__(self):
+        self.total_enemy_tanks = 0
+        self.total_created_enemy_tanks = 0
+        self.max_enemy_tanks = None
+        self.remaining_enemies = self.total_enemy_tanks
+
+        self.enemy_tanks_positions = None
+        self.initial_reborn_position = cfg.INITIAL_REBORN
+        self.teammate_reborn_position = cfg.INITIAL_REBORN
+        self.reborn_interval = cfg.REBORN_INTERVAL
+
+        self.window = None
+        self.window_size = (cfg.WIDTH, cfg.HEIGHT)
+        self.cell_len = 24
+
+        self.key_order = []
+        self.keys_pressed = None
+        self.teammate_event = ''
+
+        self.game_lose = False
+        self.game_win = False
+
+        self.is_multiplayer = False
+
+
+class TanksEvent:
+    def __init__(self, my_tank,teammate_tank, enemy_tanks,my_bullets ,enemy_bullets, walls, all_collision,normal_variables):
+        self.normal_variables = normal_variables
+        self.all_collision = all_collision
+
+        self.my_tank = my_tank
+        self.teammate_tank = teammate_tank
+
+        self.enemy_tanks = enemy_tanks
+        self.my_bullets = my_bullets
+        self.enemy_bullets = enemy_bullets
+
+        self.walls = walls
+
+        self.is_teammate_move = False
+        self.is_teammate_shot = False
+
+        self.allocated_tank_id = 0
+        self.allocated_bullet_id = 0
+
+    def tanks_update(self):
+        self.random_create_enemy_tanks()
+        self.tanks_move()
+        self.tanks_shot()
+
+    def render(self):
+        nv=self.normal_variables
+        #所有坦克的渲染
+        if self.my_tank and self.my_tank.live:
+            self.my_tank.display_tank()
+        elif pygame.time.get_ticks() - self.my_tank.last_dead_time > nv.reborn_interval and self.my_tank.hp > 0:  # 考虑移至更新模块中处理
+            self.tank_reborn(self.my_tank)
+
+        if self.normal_variables.is_multiplayer:
+            if self.teammate_tank and self.teammate_tank.live:
+                self.teammate_tank.display_tank()
+            elif pygame.time.get_ticks() - self.teammate_tank.last_dead_time > nv.reborn_interval and self.teammate_tank.hp > 0:
+                self.tank_reborn(self.teammate_tank)
+
+        for tank in self.enemy_tanks:
+            tank.display_tank()
+
+    def tank_creation(self):
+        self.create_my_tank()
+        self.allocated_tank_id += 1
+        if self.normal_variables.is_multiplayer:
+            self.create_teammate_tank()
+            self.allocated_tank_id += 1
+    
+    def create_my_tank(self):
+        nv = self.normal_variables
+        MainGame.my_tank = MyTank(nv.initial_reborn_position, nv.window, nv.window_size, self.allocated_tank_id)
+        self.my_tank = MainGame.my_tank
+        self.all_collision.add(MainGame.my_tank)
+
+    def create_teammate_tank(self):
+        nv = self.normal_variables
+        MainGame.teammate_tank = MyTank(nv.teammate_reborn_position, nv.window, nv.window_size, self.allocated_tank_id)
+        self.teammate_tank = MainGame.teammate_tank
+        self.all_collision.add(MainGame.teammate_tank)
+
+    #随机创建敌人-更新
+    def random_create_enemy_tanks(self):
+        nv = self.normal_variables
+        if len(self.enemy_tanks) < nv.max_enemy_tanks and nv.total_created_enemy_tanks < nv.total_enemy_tanks:
+            position = random.choice(nv.enemy_tanks_positions)
+            if not self.create_enemy_tank(position):
+                self.allocated_tank_id-=1
+
+    def create_enemy_tank(self, position):
+        nv = self.normal_variables
+
+        left, top = position[0], position[1]
+        enemy_tank = EnemyTank((left, top), nv.window, nv.window_size, self.allocated_tank_id)
+        other_tanks = Group([t for t in self.all_collision if t != enemy_tank])  # 考虑n*n矩阵，空间换时间
+        if not pygame.sprite.spritecollideany(enemy_tank, other_tanks):
+            nv.total_created_enemy_tanks += 1
+            self.enemy_tanks.add(enemy_tank)
+            self.all_collision.add(enemy_tank)
+            return True
+        return False
+    def tank_dead(self, tank):
+        pass
+
+    #射击-更新
+    def tanks_shot(self):
+        self.all_players_shot()
+        self.enemy_tank_shot()
+
+    def all_players_shot(self):
+        nv = self.normal_variables
+        if nv.is_multiplayer:
+            if nv.teammate_event == 'shot':
+                self.is_teammate_shot = True
+            elif nv.teammate_event == 's_shot':
+                self.is_teammate_shot = False
+
+            if self.is_teammate_shot:
+
+                bullet = self.teammate_tank.shot(self.allocated_bullet_id)
+                self.allocated_bullet_id += 1
+                if bullet:
+                    self.my_bullets.add(bullet)
+
+        if nv.keys_pressed:
+            if nv.keys_pressed[pygame.K_SPACE] and self.my_tank and self.my_tank.live:
+                bullet = self.my_tank.shot(self.allocated_bullet_id)
+                self.allocated_bullet_id += 1
+                if bullet:
+                    self.my_bullets.add(bullet)
+                # self.fire_music.play_music()
+    def enemy_tank_shot(self):
+        for enemy in self.enemy_tanks:
+
+            bullet = enemy.shot(self.allocated_bullet_id)
+            self.allocated_bullet_id += 1
+            if bullet:
+                self.enemy_bullets.add(bullet)
+
+    def tanks_move(self):
+        self.all_players_move()
+        self.all_enemy_tanks_move()
+
+
+    def all_players_move(self):
+        nv = self.normal_variables
+        if nv.key_order and self.my_tank and self.my_tank.live:
+            last_direction = nv.key_order[-1]
+            self.player_tank_move(self.my_tank, last_direction)
+
+        if nv.is_multiplayer:
+            if nv.teammate_event in ['L', 'R', 'U', 'D']:
+                self.teammate_tank.change_direction(nv.teammate_event)
+                self.is_teammate_move = True
+            elif nv.teammate_event == 's_move':
+                self.is_teammate_move = False
+
+            if self.is_teammate_move:
+                self.player_tank_move(self.teammate_tank, self.teammate_tank.direction)
+
+    def player_tank_move(self, tank, direction):
+        old_rect = tank.rect.copy()
+        old_direction = tank.direction
+
+        tank.move(direction)
+
+        if old_direction[0] != direction:
+            self.move_check(tank, direction, old_rect)  # 考虑减少耦合的修改
+
+        other_tanks = Group([t for t in MainGame.all_collision if t != tank])  # 考虑n*n矩阵，空间换时间
+        if pygame.sprite.spritecollideany(tank, other_tanks):
+            tank.rect = old_rect
+
+    def all_enemy_tanks_move(self):
+        for enemy in self.enemy_tanks:
+            self.enemy_tank_move(enemy)
+
+    def enemy_tank_move(self, tank):
+        old_rect = tank.rect.copy()
+        old_direction = tank.direction
+
+        tank.rand_move()
+
+        if old_direction[0] != tank.direction:
+            self.move_check(tank, tank.direction, old_rect)
+
+        other_tanks = Group([t for t in MainGame.all_collision if t != tank])  # 考虑n*n矩阵，空间换时间
+        if pygame.sprite.spritecollideany(tank, other_tanks):
+            tank.rect = old_rect
+
+    def move_check(self, tank, direction, old_rect):
+        nv = self.normal_variables
+        if direction in ['L', 'R']:
+            offset = tank.rect.top % nv.cell_len
+            if offset < nv.cell_len:
+                if offset > nv.cell_len / 2:
+                    tank.rect.top -= nv.cell_len - offset
+                else:
+                    tank.rect.top -= offset
+                old_rect.top = tank.rect.top
+        elif direction in ['U', 'D']:
+            offset = tank.rect.left % nv.cell_len
+            if offset < nv.cell_len:
+                if offset > nv.cell_len / 2:
+                    tank.rect.left -= nv.cell_len - offset
+                else:
+                    tank.rect.left -= offset
+                old_rect.left = tank.rect.left
+
+    def tank_reborn(self, tank):
+        nv = self.normal_variables
+        if tank == self.my_tank:
+            position = nv.initial_reborn_position
+        else:
+            position = nv.teammate_reborn_position
+        
+        tank.rect.left, tank.rect.top = position
+        tank.direction = 'U1'
+        other_tanks = Group([t for t in MainGame.all_collision if t != tank])  # 考虑n*n矩阵，空间换时间
+        if not pygame.sprite.spritecollideany(tank, other_tanks):
+            self.all_collision.add(tank)
+            tank.live = True
+
+
+class BulletsEvent:
+    def __init__(self,my_bullets,enemy_bullets,normal_variables):
+        self.normal_variables = normal_variables
+        self.my_bullets = my_bullets
+        self.enemy_bullets = enemy_bullets
+
+    def bullets_update(self):
+        self.bullets_move()
+
+    def render(self):
+        for bullet in self.my_bullets:
+            bullet.display_bullet(self.normal_variables.window)
+        for bullet in self.enemy_bullets:
+            bullet.display_bullet(self.normal_variables.window)
+    def bullets_move(self):
+        for bullet in self.my_bullets:
+            bullet.move(self.normal_variables.window_size)
+        for bullet in self.enemy_bullets:
+            bullet.move(self.normal_variables.window_size)
+
+class ScenesEvent:
+    def __init__(self, all_collision,walls,normal_variables):
+        self.normal_variables = normal_variables
+
+        self.all_collision = all_collision
+        self.walls = walls
+
+        self.allocated_scenes_id=0
+    def scenes_update(self):
+        pass
+    def render(self):
+        nv = self.normal_variables
+        for wall in self.walls:
+            wall.display_static_entity(nv.window)
+    def scenes_creation(self, scenes_type, position):
+        if scenes_type == 'B':
+            self.create_brick_wall(position, self.allocated_scenes_id)
+            self.allocated_scenes_id+=1
+        elif scenes_type == 'I':
+            self.create_steel_wall(position, self.allocated_scenes_id)
+            self.allocated_scenes_id+=1
+        elif scenes_type == 'R':
+            self.create_river_wall(position)
+        elif scenes_type == 'C':
+            self.create_ice_wall(position)
+        elif scenes_type == 'T':
+            self.create_tree_wall(position)
+
+    def create_steel_wall(self, position, create_id):
+        left, top = position[0], position[1]
+        wall = SteelWall((left, top), create_id)
+
+        self.walls.add(wall)
+        self.all_collision.add(wall)
+
+    def create_brick_wall(self, position, create_id):
+        left, top = position[0], position[1]
+        wall = BrickWall((left, top), create_id)
+
+        self.walls.add(wall)
+        self.all_collision.add(wall)
+
+    def create_river_wall(self, position):
+        pass
+
+    def create_ice_wall(self, position):
+        pass
+
+    def create_tree_wall(self, position):
+        pass
+
+class CollisionEvent:
+    def __init__(self, my_tank,teammate_tank, enemy_tanks,my_bullets ,enemy_bullets, walls, explosions, normal_variables):
+        self.normal_variables = normal_variables
+        self.my_tank = my_tank
+        self.teammate_tank = teammate_tank
+        self.enemy_tanks = enemy_tanks
+
+        self.my_bullets = my_bullets
+        self.enemy_bullets = enemy_bullets
+
+        self.walls = walls
+        self.explosions = explosions
+
+
+        self.default_collided = pygame.sprite.collide_rect_ratio(0.8)
+
+    def collision_update(self):
+        self.tank_bullet_collision()
+        self.bullet_wall_collision()
+        self.tank_move_collision()
+
+    def render(self):
+        nv = self.normal_variables
+        if self.explosions:
+            ready_remove = []
+            for explosion in MainGame.explosions:
+                if explosion.live:
+                    explosion.display_explode(nv.window)
+                else:
+                    ready_remove.append(explosion)
+            for explosion in ready_remove:
+                explosion.kill()
+    def tank_bullet_collision(self):
+        # 子弹和敌方坦克的碰撞
+
+        collision_results = {
+            'explosion': []
+        }
+        hits = groupcollide(self.my_bullets, self.enemy_tanks, True, True, collided=self.default_collided)
+        for bullet, tanks in hits.items():
+
+            for tank in tanks:
+                tank.hp -= 1
+                if tank.hp <= 0:
+                    tank.live = False
+                    self.normal_variables.remaining_enemies -= 1
+                    tank.kill()
+                collision_results['explosion'].append(tank)
+
+        #子弹碰撞
+        groupcollide(self.enemy_bullets, self.my_bullets, True, True)
+
+        # 我方坦克和子弹的碰撞
+        if self.my_tank and self.my_tank.live:
+            hits = spritecollide(self.my_tank, self.enemy_bullets, False, collided=self.default_collided)
+            if hits:
+                self.my_tank.hp -= 1
+                self.my_tank.live = False
+                self.my_tank.kill()
+                collision_results['explosion'].append(self.my_tank)
+                self.tank_dead(self.my_tank)
+        # 队友坦克和子弹的碰撞
+        if self.normal_variables.is_multiplayer and self.teammate_tank and self.teammate_tank.live:
+            hits = spritecollide(self.teammate_tank, self.enemy_bullets, True, collided=self.default_collided)
+            if hits:
+                self.teammate_tank.hp -= 1
+                self.teammate_tank.live = False
+                self.teammate_tank.kill()
+                collision_results['explosion'].append(self.teammate_tank)
+                self.tank_dead(self.teammate_tank)
+        if collision_results['explosion']:
+            print(collision_results)
+        for tank in collision_results['explosion']:
+            self.create_explosion(tank)
+
+    def tank_dead(self,tank):
+        tank.last_dead_time = pygame.time.get_ticks()
+    def bullet_wall_collision(self):
+        # 子弹与墙的碰撞
+
+        collision_results={
+            'explosion':[]
+        }
+
+        hits = pygame.sprite.groupcollide(self.my_bullets, self.walls, True, False)
+        for bullet, walls in hits.items():
+            collision_results['explosion'].append(bullet)
+            for wall in walls:
+                if wall.type == 'brick':
+                    wall.hp -= 1
+                if wall.hp <= 0:
+                    wall.live = False
+                    wall.kill()
+
+        hits = pygame.sprite.groupcollide(self.walls, self.enemy_bullets, False, True)
+        for wall, bullets in hits.items():
+            collision_results['explosion'].append(wall)
+            if wall.type == 'brick':
+                wall.hp -= 1
+            if wall.hp <= 0:
+                wall.live = False
+                wall.kill()
+
+        for bullet in collision_results['explosion']:
+            self.create_bullet_explosion(bullet)
+    def tank_move_collision(self):
+        pass
+
+    def create_explosion(self, tank: Tank):
+        explode = Explode(tank)
+        self.explosions.add(explode)
+        # self.hit_music.play_music()
+
+    def create_bullet_explosion(self, bullet):
+        explode = BulletExplode(bullet)
+        self.explosions.add(explode)
+        # self.hit_music.play_music()
+
+class GameResultEvent:
+    def __init__(self, normal_variables,my_tank,teammate_tank,enemy_tanks):
+        self.normal_variables = normal_variables
+        self.my_tank = my_tank
+        self.teammate_tank = teammate_tank
+        self.enemy_tanks = enemy_tanks
+
+    def game_result_update(self):
+        self.game_win_check()
+        self.game_lose_check()
+        self.game_result_check()
+
+    def game_lose_check(self):
+        if self.normal_variables.is_multiplayer:
+            if self.my_tank.hp<=0 and self.teammate_tank.hp<=0:
+                self.normal_variables.game_lose = True
+        else:
+            if self.my_tank.hp<=0:
+                self.normal_variables.game_lose = True
+
+    def game_win_check(self):
+        if self.normal_variables.remaining_enemies <= 0:
+            self.normal_variables.game_win = True
+    def game_result_check(self):
+        nv = self.normal_variables
+        if nv.game_win:
+            my_font = pygame.font.Font(cfg.FONTPATH, 50)
+            win_text = my_font.render('You Win', True, pygame.Color(255, 0, 0))
+            nv.window.blit(win_text, ( nv.window_size[0] / 2 - win_text.get_width() / 2, nv.window_size[1] / 2 - win_text.get_height() / 2))
+        elif nv.game_lose:
+            # 加载失败图片
+            game_over_image = pygame.image.load(cfg.OTHER_IMAGE_PATHS['gameover'])
+            logo_width = 300
+            logo_height = int(game_over_image.get_height() * (logo_width / game_over_image.get_width()))
+            game_over_image = pygame.transform.scale(game_over_image, (logo_width, logo_height))
+            nv.window.blit(game_over_image, (nv.window_size[0] / 2 - game_over_image.get_width() / 2,nv.window_size[1] / 2 - game_over_image.get_height() / 2))
+class RemoteEvent:
+    def __init__(self,network_handler):
+        self.network_handler = network_handler
+    def send_all_events(self):
+        """发送本地玩家状态到网络"""
+        if not self.network_handler:
+            return
+    def send_player_tank_events(self,my_tank,teammate_tank):
+        # 全部数据
+        # 序列化并发送坦克数据
+        tank_datas = []
+        for tank in [my_tank, teammate_tank]:
+            tank_data = self.network_handler.serialize_tank_data(tank)
+            if tank_data:
+                tank_datas.append(tank_data)
+    def send_scenes_events(self,walls):
+        scenes_data = []
+        for scene in walls:
+            scene_data = self.network_handler.serialize_scenes_data(scene)
+            if scene_data:
+                scenes_data.append(scene_data)
+
+    def send_shot_events(self, tank):
+        """发送本地玩家开火事件到网络"""
+        if not self.network_handler:
+            return
+
+        data = self.network_handler.serialize_bullet_data(tank)
+        self.network_handler.send_data(data)
+
+    def get_remote_tank_event(self):
+        pass
+
 class MainGame:
     window = None
 
     my_tank = None
     teammate_tank = None
     enemy_tanks = Group()
+
     all_collision = Group()
 
     my_bullets = Group()
@@ -28,45 +517,27 @@ class MainGame:
 
     clock = None
 
-
-
     def __init__(self):
-        self.is_teammate_shot = None
-        self.is_teammate_move = None
-        self.remaining_enemies = None
+
+
+        self.normal_variables = NormalVariables()
+
         self.panel_x = None
-        self.total_enemy_tanks = None
-        self.remaining_enemies = self.total_enemy_tanks
         self.level_config = None
-        self.max_enemy_tanks = None
-        self.enemy_tanks_positions = None
-        self.reborn_position = cfg.INITIAL_REBORN
-        self.teammate_reborn_position = cfg.INITIAL_REBORN
 
-        self.game_lose = False
-        self.game_win = False
+        self.game_result_event = None
+        self.remote_event = None
+        self.scenes_event = None
+        self.collision_event = None
+        self.tanks_event = None
+        self.bullet_event = None
 
-        self.is_multiplayer = False
+
         self.network_handler = None
-        self.message_handler = None
         self.network_mode = None  # 'host' or 'join'
-        self.teammate_change_direction = None
-
-        self.key_order = []
-        self.my_tank_dead_time=0
-        self.teammate_tank_dead_time = 0
-        self.total_created_enemy_tanks = 0
-
-        self.reborn_interval=cfg.REBORN_INTERVAL
 
         self.fire_music = Sound(cfg.AUDIO_PATHS['fire'])
         self.hit_music = Sound(cfg.AUDIO_PATHS['hit'])
-
-        self.cell_len=24
-
-        self.window_size = (cfg.WIDTH, cfg.HEIGHT)
-        self.allocated_tank_id=0
-        self.allocated_scenes_id=0
 
     def init_image_size(self):
         scene_sizes = {}
@@ -77,7 +548,7 @@ class MainGame:
 
     def start_game(self, level='1'):
         """启动游戏，可指定关卡"""
-        MainGame.window = pygame.display.set_mode((cfg.WIDTH+cfg.PANEL_WIDTH, cfg.HEIGHT))
+        MainGame.window = pygame.display.set_mode((cfg.WIDTH + cfg.PANEL_WIDTH, cfg.HEIGHT))
         pygame.font.init()
         pygame.display.set_caption(cfg.TITLE)
 
@@ -86,10 +557,24 @@ class MainGame:
 
         MainGame.clock = pygame.time.Clock()
 
+        nv = self.normal_variables
+        nv.window = MainGame.window
+        self.scenes_event = ScenesEvent(self.all_collision, self.walls, nv)
         # 加载指定关卡
         self.load_lvl(str(level))
-        Music(cfg.AUDIO_PATHS['start']).play_music()
-        self.create_all_players()
+        # Music(cfg.AUDIO_PATHS['start']).play_music()
+
+        
+        self.tanks_event=TanksEvent(self.my_tank,self.teammate_tank, self.enemy_tanks,self.my_bullets ,self.enemy_bullets, self.walls, self.all_collision, nv)
+        self.tanks_event.tank_creation()
+
+        self.remote_event=RemoteEvent(self.network_handler)
+        self.game_result_event=GameResultEvent(nv,self.my_tank,self.teammate_tank,self.enemy_tanks)
+        self.collision_event=CollisionEvent(self.my_tank,self.teammate_tank, self.enemy_tanks,self.my_bullets ,self.enemy_bullets, self.walls, self.explosions, nv)
+
+        self.bullet_event=BulletsEvent(self.my_bullets,self.enemy_bullets,self.normal_variables)
+
+
 
         while True:
             MainGame.clock.tick(cfg.INITIAL_TICK)
@@ -100,7 +585,7 @@ class MainGame:
             self.render()
 
             pygame.display.update()
-    
+
     def start_multiplayer_game(self, mode='host', level='1'):
         """启动多人游戏
         Args:
@@ -109,12 +594,13 @@ class MainGame:
         """
         self.network_mode = mode
         self.is_multiplayer = True
-        
+
         # 初始化网络
-        self.network_handler=ServerHandler(port=12345)
-        
+        self.network_handler = ServerHandler(level, port=12345)
+        self.network_handler.create_host()
+
         # 启动游戏窗口
-        MainGame.window = pygame.display.set_mode((cfg.WIDTH+cfg.PANEL_WIDTH, cfg.HEIGHT))
+        MainGame.window = pygame.display.set_mode((cfg.WIDTH + cfg.PANEL_WIDTH, cfg.HEIGHT))
         pygame.font.init()
         pygame.display.set_caption(cfg.TITLE + " - 多人游戏")
 
@@ -140,9 +626,8 @@ class MainGame:
                     self.send_change_events()
 
                 self.render()
-                
-                # 发送本地玩家状态
 
+                # 发送本地玩家状态
 
                 pygame.display.update()
         finally:
@@ -152,8 +637,10 @@ class MainGame:
 
     def load_lvl(self, level):
         """加载关卡文件"""
+        nv=self.normal_variables
+
         path = cfg.LEVELFILEDIR + '/' + str(level) + '.lvl'
-        
+
         # 检查文件是否存在
         if not os.path.exists(path):
             print(f"关卡文件不存在: {path}，使用默认关卡1")
@@ -172,7 +659,7 @@ class MainGame:
 
         # 解析配置参数
         config = {}
-        num_row=0
+        num_row = 0
 
         for i, line in enumerate(lines):
             line = line.strip()
@@ -204,11 +691,11 @@ class MainGame:
                 positions = []
                 for pos in pos_str.split():
                     x, y = map(int, pos.split(','))
-                    positions.append((x*self.cell_len, y*self.cell_len))
+                    positions.append((x * self.normal_variables.cell_len, y * self.normal_variables.cell_len))
                 config['enemy_tank_pos'] = positions
             elif line and not line.startswith('#') and not line.startswith('%'):
                 for row_i, elem in enumerate(line.split(' ')):
-                    self.create_element((row_i*self.cell_len, num_row*self.cell_len), elem)
+                    self.scenes_event.scenes_creation(elem,(row_i * self.normal_variables.cell_len, num_row * self.normal_variables.cell_len))
                 num_row += 1
 
         # 保存关卡配置
@@ -217,101 +704,31 @@ class MainGame:
         print(config)
 
         # 更新敌方坦克数量
-        self.max_enemy_tanks = config.get('max_enemy_num', 6)
-        self.total_enemy_tanks = config.get('total_enemy_num', 12)
-        self.remaining_enemies = self.total_enemy_tanks
+        nv.max_enemy_tanks = config.get('max_enemy_num', 6)
+        nv.total_enemy_tanks = config.get('total_enemy_num', 12)
+        nv.remaining_enemies = nv.total_enemy_tanks
         player_positions = config.get('player_tank_pos', [(8, 24), (16, 24)])
-        self.reborn_position = (player_positions[0][0]*self.cell_len, player_positions[0][1]*self.cell_len)
-        self.teammate_reborn_position = (player_positions[1][0]*self.cell_len, player_positions[1][1]*self.cell_len)
-        self.enemy_tanks_positions = config.get('enemy_tank_pos', [(0, 0), (288, 0), (576, 0)])
+        nv.initial_reborn_position = (player_positions[0][0] * nv.cell_len, player_positions[0][1] * nv.cell_len)
+        nv.teammate_reborn_position = (player_positions[1][0] * nv.cell_len, player_positions[1][1] * nv.cell_len)
+        nv.enemy_tanks_positions = config.get('enemy_tank_pos', [(0, 0), (288, 0), (576, 0)])
 
-    def check_collision(self):
-        # 子弹和敌方坦克的碰撞
-        default_collided = pygame.sprite.collide_rect_ratio(0.8)
 
-        hits=groupcollide(self.my_bullets,self.enemy_tanks,True,False,collided=default_collided)
-        for bullet,tanks in hits.items():
-            for tank in tanks:
-                tank.hp-=1
-                if tank.hp <= 0:
-                    tank.live = False
-                    self.remaining_enemies -= 1
-                    tank.kill()
-                    if self.remaining_enemies <= 0:
-                        self.game_win = True
-                self.create_explosion(tank)
-
-        groupcollide(self.enemy_bullets,self.my_bullets,True,True)
-
-        #我方坦克和子弹的碰撞
-        if self.my_tank and self.my_tank.live:
-            hits = spritecollide(self.my_tank, self.enemy_bullets, False,collided=default_collided)
-            if hits:
-                self.my_tank.hp-=1
-                self.my_tank.live = False
-                self.all_collision.remove(self.my_tank)
-                self.create_explosion(self.my_tank)
-                self.my_tank_dead_time=pygame.time.get_ticks()
-        #队友坦克和子弹的碰撞
-        if self.teammate_tank and self.teammate_tank.live:
-            hits = spritecollide(self.teammate_tank, self.enemy_bullets, False,collided=default_collided)
-            if hits:
-                self.teammate_tank.hp-=1
-                self.teammate_tank.live = False
-                self.all_collision.remove(self.teammate_tank)
-                self.create_explosion(self.teammate_tank)
-                self.teammate_tank_dead_time=pygame.time.get_ticks()
-
-        #子弹与墙的碰撞
-        hits=pygame.sprite.groupcollide( self.my_bullets,self.walls, True, False)
-        for bullet,walls in hits.items():
-            self.create_bullet_explosion(bullet)
-            for wall in walls:
-                if wall.type=='brick':
-                    wall.hp-=1
-                if wall.hp<=0:
-                    wall.live=False
-                    wall.kill()
-
-        hits = pygame.sprite.groupcollide(self.walls, self.enemy_bullets, False, True)
-        for wall, bullets in hits.items():
-            self.create_bullet_explosion(wall)
-            if wall.type=='brick':
-                wall.hp-=1
-            if wall.hp<=0:
-                wall.live=False
-                wall.kill()
 
     def update(self):
 
-        #生成敌方坦克
-        self.random_create_enemy_tanks()
+        self.tanks_event.tanks_update()
+        self.bullet_event.bullets_update()
+        self.collision_event.collision_update()
 
-        # 移动所有子弹
-        for bullet in self.my_bullets:
-            bullet.move(self.window_size)
-        for bullet in self.enemy_bullets:
-            bullet.move(self.window_size)
-
-        #更新菜单
+        # 更新菜单
         self.menu()
 
-        # 敌方坦克移动和射击
-        self.enemy_tank_event()
-
-        # 我的坦克移动
-        self.my_tank_event()
-
-        # 更新远程玩家
-        if self.is_multiplayer:
-            self.get_remote_tank_event()
-            self.teammate_tank_event()
+        # # 更新远程玩家
+        # if self.is_multiplayer:
+        #     self.get_remote_tank_event()
+        #     self.teammate_tank_event()
 
         # 碰撞检测（关键步骤）
-        self.check_collision()
-        
-
-
 
     def render(self):
         """渲染所有元素"""
@@ -320,48 +737,22 @@ class MainGame:
         background_image = pygame.image.load(cfg.OTHER_IMAGE_PATHS['background'])
         self.window.blit(background_image, (0, 0))
 
-        if self.my_tank and self.my_tank.live:
-            self.my_tank.display_tank()
-        elif pygame.time.get_ticks()-self.my_tank_dead_time>self.reborn_interval and self.my_tank.hp>=0:#考虑移至更新模块中处理
-            self.reborn_tank(self.my_tank,self.reborn_position)
+        self.tanks_event.render()
 
-        if self.teammate_tank and self.teammate_tank.live:
-            self.teammate_tank.display_tank()
-        elif pygame.time.get_ticks()-self.teammate_tank_dead_time>self.reborn_interval and self.teammate_tank.hp>=0:
-            self.reborn_tank(self.teammate_tank,self.teammate_reborn_position)
+        self.bullet_event.render()
+        self.scenes_event.render()
 
-        if self.my_tank.hp<0 and self.teammate_tank.hp<0:
-            self.game_over = True
+        self.game_result_event.game_result_update()
 
-        for enemy in self.enemy_tanks:
-            enemy.display_tank()
+        self.collision_event.render()
 
-        for bullet in self.my_bullets:
-            bullet.display_bullet(self.window)
-        for bullet in self.enemy_bullets:
-            bullet.display_bullet(self.window)
-
-        #加载墙壁
-        for wall in self.walls:
-            wall.display_static_entity(self.window)
-
-        if MainGame.explosions:
-            ready_remove = []
-            for explosion in MainGame.explosions:
-                if explosion.live:
-                    explosion.display_explode(self.window)
-                else:
-                    ready_remove.append(explosion)
-            MainGame.explosions = Group([e for e in MainGame.explosions if e not in ready_remove])
-
-        enemy_text = self.get_text_surface(f"敌人: {self.remaining_enemies}",20)
+        enemy_text = self.get_text_surface(f"敌人: {self.normal_variables.remaining_enemies}", 20)
         self.window.blit(enemy_text, (self.panel_x, 10))
 
         if self.my_tank:
-            hp_text = self.get_text_surface(f"血量: {self.my_tank.hp}",20)
+            hp_text = self.get_text_surface(f"血量: {self.my_tank.hp}", 20)
             self.window.blit(hp_text, (self.panel_x, 50))
 
-        self.game_over_check()
 
         pygame.display.update()
 
@@ -369,246 +760,45 @@ class MainGame:
         # 显示右侧信息面板
         self.panel_x = cfg.WIDTH + 10
 
-
-    def create_element(self,position,type):
-        if type=='B':
-            self.create_brick_wall(position)
-        elif type=='I':
-            self.create_steel_wall(position)
-        elif type=='R':
-            self.create_river_wall(position)
-        elif type=='C':
-            self.create_ice_wall(position)
-        elif type=='T':
-            self.create_tree_wall(position)
-
-    def create_explosion(self,tank:Tank):
-        explode = Explode(tank)
-        MainGame.explosions.add(explode)
-        self.hit_music.play_music()
-
-    def create_bullet_explosion(self,bullet):
-        explode = BulletExplode(bullet)
-        MainGame.explosions.add(explode)
-        self.hit_music.play_music()
-
-
-    def create_all_players(self):
-        self.create_my_tank(self.reborn_position)
-        if self.is_multiplayer:
-            self.create_teammate_tank(self.teammate_reborn_position)
-    
-    def send_change_events(self):
-        """发送本地玩家状态到网络"""
-        if not self.message_handler or not self.my_tank:
-            return
-
-        #全部数据
-        # 序列化并发送坦克数据
-        tank_datas=[]
-        for tank in [self.my_tank,self.teammate_tank]:
-            tank_data = self.message_handler.serialize_tank_data(tank)
-            if tank_data:
-                tank_datas.append(tank_data)
-
-    def send_shot_events(self,tank):
-        """发送本地玩家开火事件到网络"""
-        if not self.message_handler or not self.my_tank:
-            return
-
-        self.network_handler.send_shot_event(tank)
-
-    def create_my_tank(self,initial_reborn):
-        self.my_tank = MyTank((initial_reborn[0],initial_reborn[1]),self.window,self.window_size,self.allocated_tank_id)
-        self.allocated_tank_id += 1
-        MainGame.all_collision.add(self.my_tank)
-    def create_teammate_tank(self,teammate_reborn):
-        self.teammate_tank = MyTank((teammate_reborn[0], teammate_reborn[1]), self.window, self.window_size, self.allocated_tank_id)
-        self.allocated_tank_id += 1
-        MainGame.all_collision.add(self.teammate_tank)
-
-    def random_create_enemy_tanks(self):
-        if len(self.enemy_tanks)<self.max_enemy_tanks and self.total_created_enemy_tanks<self.total_enemy_tanks:
-            position = random.choice(self.enemy_tanks_positions)
-            self.create_enemy_tank(position)
-    def create_enemy_tank(self,position):
-        left, top = position[0], position[1]
-        enemy_tank = EnemyTank((left,top),self.window,self.window_size,tank_id=-1)
-        other_tanks = Group([t for t in MainGame.all_collision if t != enemy_tank])  # 考虑n*n矩阵，空间换时间
-        if not pygame.sprite.spritecollideany(enemy_tank, other_tanks):
-            enemy_tank.id = self.allocated_tank_id
-            self.allocated_tank_id += 1
-            self.enemy_tanks.add(enemy_tank)
-            MainGame.all_collision.add(enemy_tank)
-            self.total_created_enemy_tanks+=1
-
-    def create_steel_wall(self,position):
-        left, top = position[0], position[1]
-        wall = SteelWall((left, top),self.allocated_scenes_id)
-        self.allocated_scenes_id+=1
-
-        MainGame.walls.add(wall)
-        MainGame.all_collision.add(wall)
-
-    def create_brick_wall(self,position):
-        left, top = position[0], position[1]
-        wall = BrickWall((left, top),self.allocated_scenes_id)
-        self.allocated_scenes_id+=1
-        MainGame.walls.add(wall)
-        MainGame.all_collision.add(wall)
-
-    def create_river_wall(self,position):
-        pass
-    def create_ice_wall(self,position):
-        pass
-    def create_tree_wall(self,position):
-        pass
-
-    def reborn_tank(self,tank,position):
-        tank.rect.left, tank.rect.top = position
-        tank.direction = 'U1'
-        other_tanks = Group([t for t in MainGame.all_collision if t != tank])  # 考虑n*n矩阵，空间换时间
-        if not pygame.sprite.spritecollideany(tank, other_tanks):
-            self.all_collision.add(tank)
-            tank.live= True
-
-    def player_tank_move(self,tank,direction):
-        old_rect = tank.rect.copy()
-        old_direction = tank.direction
-
-        tank.move(direction)
-
-        if old_direction[0] != direction:
-            self.move_check(tank,direction,old_rect)#考虑减少耦合的修改
-
-
-        other_tanks = Group([t for t in MainGame.all_collision if t != tank])  # 考虑n*n矩阵，空间换时间
-        if pygame.sprite.spritecollideany(tank, other_tanks):
-            tank.rect = old_rect
-
-    def enemy_tank_move(self,tank):
-        old_rect = tank.rect.copy()
-        old_direction = tank.direction
-
-        tank.rand_move()
-
-        if old_direction[0] != tank.direction:
-            self.move_check(tank,tank.direction,old_rect)
-
-        other_tanks = Group([t for t in MainGame.all_collision if t != tank])  # 考虑n*n矩阵，空间换时间
-        if pygame.sprite.spritecollideany(tank, other_tanks):
-            tank.rect = old_rect
-
-    def move_check(self,tank,direction,old_rect):
-        cell_size = self.cell_len
-
-        if direction in ['L', 'R']:
-            offset=tank.rect.top % cell_size
-            if offset < cell_size:
-                if offset > cell_size / 2:
-                    tank.rect.top -= cell_size-offset
-                else:
-                    tank.rect.top -= offset
-                old_rect.top = tank.rect.top
-        elif direction in ['U', 'D']:
-            offset=tank.rect.left % cell_size
-            if offset < cell_size:
-                if offset > cell_size / 2:
-                    tank.rect.left -= cell_size-offset
-                else:
-                    tank.rect.left -= offset
-                old_rect.left = tank.rect.left
-    def enemy_tank_event(self):
-        for enemy in self.enemy_tanks:
-            self.enemy_tank_move(enemy)
-            bullet = enemy.shot()
-            if bullet:
-                self.send_shot_events(enemy)
-                self.enemy_bullets.add(bullet)
-
-    def my_tank_event(self):
-
-        if self.key_order and self.my_tank and self.my_tank.live:
-            last_direction = self.key_order[-1]
-            self.player_tank_move(self.my_tank, last_direction)
-
-    def teammate_tank_key_event(self,event):
-        if event in ['L', 'R', 'U', 'D']:
-            self.teammate_change_direction=event
-            self.is_teammate_move = True
-        elif event=='s_move':
-            self.is_teammate_move = False
-        elif event=='shot':
-            self.is_teammate_shot = True
-        elif event=='s_shot':
-            self.is_teammate_shot = True
-
-    def teammate_tank_event(self):
-        if self.is_teammate_shot:
-            bullet = self.teammate_tank.shot()
-            if bullet:
-                self.my_bullets.add(bullet)
-                self.fire_music.play_music()
-        if self.is_teammate_move:
-            self.player_tank_move(self.teammate_tank, self.teammate_change_direction)
-
-    def get_text_surface(self, text,size=25):
+    def get_text_surface(self, text, size=25):
 
         my_font = pygame.font.Font(cfg.FONTPATH, size)
         text_surface = my_font.render(text, True, pygame.Color(255, 0, 0))
         return text_surface
 
     def get_event(self):
+        nv=self.normal_variables
         event_list = pygame.event.get()
         for event in event_list:
             if event.type == pygame.QUIT:
                 self.end_game()
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_LEFT and 'L' not in self.key_order:
-                    self.key_order.append('L')
-                elif event.key == pygame.K_RIGHT and 'R' not in self.key_order:
-                    self.key_order.append('R')
-                elif event.key == pygame.K_UP and 'U' not in self.key_order:
-                    self.key_order.append('U')
-                elif event.key == pygame.K_DOWN and 'D' not in self.key_order:
-                    self.key_order.append('D')
+                if event.key == pygame.K_LEFT and 'L' not in nv.key_order:
+                    nv.key_order.append('L')
+                elif event.key == pygame.K_RIGHT and 'R' not in nv.key_order:
+                    nv.key_order.append('R')
+                elif event.key == pygame.K_UP and 'U' not in nv.key_order:
+                    nv.key_order.append('U')
+                elif event.key == pygame.K_DOWN and 'D' not in nv.key_order:
+                    nv.key_order.append('D')
 
             if event.type == pygame.KEYUP:
-                if event.key == pygame.K_LEFT and 'L' in self.key_order:
-                    self.key_order.remove('L')
-                elif event.key == pygame.K_RIGHT and 'R' in self.key_order:
-                    self.key_order.remove('R')
-                elif event.key == pygame.K_UP and 'U' in self.key_order:
-                    self.key_order.remove('U')
-                elif event.key == pygame.K_DOWN and 'D' in self.key_order:
-                    self.key_order.remove('D')
-        keys_pressed = pygame.key.get_pressed()
-        if keys_pressed[pygame.K_SPACE] and self.my_tank and self.my_tank.live:
-            bullet = self.my_tank.shot()
-            if bullet:
-                self.my_bullets.add(bullet)
-                self.fire_music.play_music()
+                if event.key == pygame.K_LEFT and 'L' in nv.key_order:
+                    nv.key_order.remove('L')
+                elif event.key == pygame.K_RIGHT and 'R' in nv.key_order:
+                    nv.key_order.remove('R')
+                elif event.key == pygame.K_UP and 'U' in nv.key_order:
+                    nv.key_order.remove('U')
+                elif event.key == pygame.K_DOWN and 'D' in nv.key_order:
+                    nv.key_order.remove('D')
+        nv.keys_pressed = pygame.key.get_pressed()
 
-    def get_remote_tank_event(self):
-        remote_tank_events=self.network.receive()
-        for remote_tank_event in remote_tank_events:
-            self.teammate_tank_key_event(remote_tank_event)
 
-    def game_over_check(self):
-        if self.game_win:
-            win_text = self.get_text_surface("You Win",50)
-            self.window.blit(win_text, (self.window_size[0] / 2 - win_text.get_width() / 2, self.window_size[1] / 2 - win_text.get_height() / 2))
-        elif self.game_lose:
-            #加载失败图片
-            game_over_image = pygame.image.load(cfg.OTHER_IMAGE_PATHS['gameover'])
-            logo_width = 300
-            logo_height = int(game_over_image.get_height() * (logo_width / game_over_image.get_width()))
-            game_over_image = pygame.transform.scale(game_over_image, (logo_width, logo_height))
-            self.window.blit(game_over_image, (self.window_size[0] / 2 - game_over_image.get_width() / 2, self.window_size[1] / 2 - game_over_image.get_height() / 2))
+
     def end_game(self):
         # 清理网络资源
-        if self.network:
-            self.network.disconnect()
+        if self.network_handler:
+            self.network_handler.disconnect()
         print("退出游戏")
         pygame.quit()
         exit()

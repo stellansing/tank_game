@@ -7,14 +7,20 @@ class StaticEntity(Sprite):
         super().__init__()
         self.image = None
         self.rect = None
-        self.position = position
 
+        self.position = position
         self.id=entity_id
         self.hp = None
         self.live = True
 
     def display_static_entity(self,window):
         window.blit(self.image, self.rect)
+
+    def dead(self):
+        self.live = False
+
+    def move(self):
+        pass
 class SteelWall(StaticEntity):
     def __init__(self,position: tuple,entity_id):
         super().__init__(position,entity_id)

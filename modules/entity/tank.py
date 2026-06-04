@@ -25,11 +25,12 @@ class Tank(Sprite):
         self.animation_timer = 0
         self.animation_interval = 100
 
-        self.hp=None
+        self.hp=3
         self.live = True
+        self.last_dead_time = 0
 
         self.speed = 2
-        self.shot_speed = 2000
+        self.shot_speed = 200
 
         self.shot_time_computer = TimeComputer(self.shot_speed)
         self.tank_animation_time_computer = TimeComputer(self.animation_interval)
@@ -46,6 +47,9 @@ class Tank(Sprite):
 
     def speed_change(self, change_direction,accelerate):
         pass
+
+    def change_direction(self,direction):
+        self.direction = str(direction)+self.direction[1]
 
     def move(self,direction):
 
@@ -66,12 +70,14 @@ class Tank(Sprite):
         self.direction = f"{direction}{self.current_frame + 1}"
         self.update_animation()
 
-    def shot(self):
+    def shot(self,bullet_id):
         if self.shot_time_computer.set_interval():
-            bullet = Bullet(self)
+            bullet = Bullet(self,bullet_id)
             return bullet
         return None
 
+    def dead(self):
+        self.live = False
 class MyTank(Tank):
     def __init__(self,position,window,game_window_size:tuple,tank_id):
         super().__init__(position,window,game_window_size,tank_id)
