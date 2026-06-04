@@ -178,11 +178,11 @@ class UDPNetwork:
             #     'events': []
             # }
             self.is_updated = True
-            self.receive_datas = message
+            self.receive_datas = message.get('data')
 
         elif msg_type == 'entity_update':
             self.is_updated = True
-            self.receive_datas = message
+            self.receive_datas = message.get('data')
                 
         elif msg_type == 'player_disconnect':
             for i, player in enumerate(self.players):
@@ -233,7 +233,6 @@ class UDPNetwork:
 class ServerHandler:
     """服务器处理类"""
     def __init__(self, level,port=5000):
-        self.is_connected = False
         self.network = UDPNetwork(level,port)
         self.is_connected=self.network.create_host()
         self.connected_address=self.network.connected_address
@@ -244,19 +243,13 @@ class ServerHandler:
         """运行服务器"""
         data = None
         if self.network.is_updated:
-            data = self.handle_updates(self.network.receive_datas)
+            data = self.network.receive_datas
             self.network.is_updated = False
-
         if data:
             return data
         return None
-    def handle_updates(self, receive_datas):
-        events=receive_datas.get('events')
-        if events:
-            return events
-        return None
 
-    def send_data(self, data):
+    def send_entity_data(self, data):
         """发送数据"""
         message={
             'type': 'entity_update',
@@ -264,48 +257,35 @@ class ServerHandler:
         }
         self.network.send_message(message, self.connected_address)
 
-    def serialize_tank_data(self, tank):
-        if not tank:
-            return None
-        
-        return {
-            'type': 'tank',
-            'id': tank.id,
-            'position': (tank.rect.left, tank.rect.top),
-            'live': tank.live,
-            'direction': tank.direction
-        }
-
-    def serialize_scenes_data(self, scenes):
-        if not scenes:
-            return None
-
-        return {
-            'type': 'scenes',
-            'id': scenes.id,
-            'position': (scenes.rect.left, scenes.rect.top),
-            'live': scenes.live,
-        }
-
-    def serialize_bullet_data(self, bullet):
-        if not bullet:
-            return None
-
-        return {
-            'type': 'shoot',
-            'tank_id': bullet.owner_tank.id,
-            'bullet_pos': list(bullet.rect.topleft),
-            'direction': bullet.direction,
-            'timestamp': pygame.time.get_ticks()
-        }
-
     def disconnect(self):
         """断开连接"""
         self.network.disconnect()
 
-    def create_host(self):
-        return self.network.create_host()
-    def join_game(self):
-        if_join=self.network.join_game()
+class ClientHandler:
+    def __init__(self,port=5000):
+        self.network = UDPNetwork(1,port)
+
+        self.is_connected=self.network.create_host()
+        self.connected_address=self.network.connected_address
         self.level=self.network.level
-        return if_join
+
+
+    def run(self):
+        """运行服务器"""
+        data = None
+        if self.network.is_updated:
+            data = self.network.receive_datas
+            self.network.is_updated = False
+        if data:
+            return data
+        return None
+
+    def send_keyboard_event(self, data):
+        message={
+            'type': 'keyboard_event',
+            'data': data
+        }
+        self.network.send_message(message, self.connected_address)
+
+    def get_level(self):
+        return self.level

@@ -5,24 +5,35 @@ import cfg
 
 
 class Bullet(Sprite):
-    def __init__(self,tank,bullet_id):
+    def __init__(self,tank,bullet_id,position=None,direction=None):
         super().__init__()
-        self.owner_tank = tank
         self.images = {
             'U': pygame.image.load(cfg.BULLET_IMAGE_PATHS['U']),
             'D': pygame.image.load(cfg.BULLET_IMAGE_PATHS['D']),
             'L': pygame.image.load(cfg.BULLET_IMAGE_PATHS['L']),
             'R': pygame.image.load(cfg.BULLET_IMAGE_PATHS['R'])
         }
-        self.img = self.images[self.owner_tank.direction[0]]
-        self.direction=self.owner_tank.direction[0]
-        self.rect = self.img.get_rect()
         self.speed = 8
+        self.id = bullet_id
+        self.live = True
+        self.is_move = False
+        if tank:
+            self.owner_tank = tank
+            self.img = self.images[self.owner_tank.direction[0]]
+            self.direction = self.owner_tank.direction[0]
+            self.rect = self.img.get_rect()
+            self.bullet_initial_position()
+        else:
+            self.img = self.images[direction]
+            self.direction = direction
+            self.rect = self.img.get_rect()
+            self.rect.left, self.rect.top = position
 
-        self.id=bullet_id
-        self.live=True
 
-        self.bullet_initial_position()
+
+
+
+
 
     def bullet_initial_position(self):
         if self.direction == 'U':

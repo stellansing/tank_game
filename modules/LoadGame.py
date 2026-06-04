@@ -29,7 +29,7 @@ class NormalVariables:
 
         self.key_order = []
         self.keys_pressed = None
-        self.teammate_event = ''
+        self.teammate_event = []
 
         self.game_lose = False
         self.game_win = False
@@ -129,10 +129,9 @@ class TanksEvent:
     def all_players_shot(self):
         nv = self.normal_variables
         if nv.is_multiplayer:
-            if nv.teammate_event == 'shot':
-                self.is_teammate_shot = True
-            elif nv.teammate_event == 's_shot':
-                self.is_teammate_shot = False
+            for event in nv.teammate_event:
+                if event == 'c_shot':
+                    self.is_teammate_shot = not self.is_teammate_shot
 
             if self.is_teammate_shot:
 
@@ -168,14 +167,15 @@ class TanksEvent:
             self.player_tank_move(self.my_tank, last_direction)
 
         if nv.is_multiplayer:
-            if nv.teammate_event in ['L', 'R', 'U', 'D']:
-                self.teammate_tank.change_direction(nv.teammate_event)
-                self.is_teammate_move = True
-            elif nv.teammate_event == 's_move':
-                self.is_teammate_move = False
+            for event in nv.teammate_event:
+                if event in ['L', 'R', 'U', 'D']:
+                    self.teammate_tank.change_direction(event)
+                    self.is_teammate_move = True
+                elif event == 's_m':
+                    self.is_teammate_move = False
 
             if self.is_teammate_move:
-                self.player_tank_move(self.teammate_tank, self.teammate_tank.direction)
+                self.player_tank_move(self.teammate_tank, self.teammate_tank.direction[0])
 
     def player_tank_move(self, tank, direction):
         old_rect = tank.rect.copy()
@@ -467,37 +467,164 @@ class GameResultEvent:
             game_over_image = pygame.transform.scale(game_over_image, (logo_width, logo_height))
             nv.window.blit(game_over_image, (nv.window_size[0] / 2 - game_over_image.get_width() / 2,nv.window_size[1] / 2 - game_over_image.get_height() / 2))
 class RemoteEvent:
-    def __init__(self,network_handler):
+    def __init__(self,network_handler,my_tank,enemy_tanks,teammate_tank,my_bullets,enemy_bullets, walls,explosions,normal_variables):
+        self.normal_variables = normal_variables
+        self.explosions = explosions
+        self.walls = walls
+        self.my_bullets = my_bullets
+        self.enemy_bullets = enemy_bullets
         self.network_handler = network_handler
+        self.my_tank = my_tank
+        self.enemy_tanks = enemy_tanks
+        self.teammate_tank = teammate_tank
+
+
+        self.init_attributes= {}
+        self.old_attributes = {}
+        self.change_attributes = {}
+
     def send_all_events(self):
-        """发送本地玩家状态到网络"""
-        if not self.network_handler:
-            return
-    def send_player_tank_events(self,my_tank,teammate_tank):
-        # 全部数据
-        # 序列化并发送坦克数据
-        tank_datas = []
-        for tank in [my_tank, teammate_tank]:
-            tank_data = self.network_handler.serialize_tank_data(tank)
-            if tank_data:
-                tank_datas.append(tank_data)
-    def send_scenes_events(self,walls):
-        scenes_data = []
-        for scene in walls:
-            scene_data = self.network_handler.serialize_scenes_data(scene)
-            if scene_data:
-                scenes_data.append(scene_data)
+        self.network_handler.send_entity_data(self.change_attributes)
 
-    def send_shot_events(self, tank):
-        """发送本地玩家开火事件到网络"""
-        if not self.network_handler:
-            return
-
-        data = self.network_handler.serialize_bullet_data(tank)
-        self.network_handler.send_data(data)
-
+    def send_init_attributes(self):
+        self.network_handler.send_entity_data(self.init_attributes)
     def get_remote_tank_event(self):
-        pass
+        events=self.network_handler.run()
+        self.normal_variables.teammate_event = events
+        #events=['U','D','L','R','s_m','c_shot']
+    def record_attributes(self):
+        self.old_attributes['tanks'] = {}
+        self.old_attributes['bullets'] = {}
+        self.old_attributes['walls'] = {}
+        self.old_attributes['explosions'] = {}
+
+        # 修正：需将 enemy_tanks (Group) 转为 list 合并遍历
+        all_tanks = [self.my_tank, self.teammate_tank] + list(self.enemy_tanks)
+        for tank in all_tanks:
+            if tank:
+                self.old_attributes['tanks'][tank.id] = {
+                    'position': tank.rect.topleft,
+                    'direction': tank.direction[0],
+                    'live': tank.live,
+                    'hp': tank.hp,
+                    'is_move': tank.is_move
+                }
+
+        # 修正：需将两个 Group 合并遍历
+        all_bullets = list(self.my_bullets) + list(self.enemy_bullets)
+        for bullet in all_bullets:
+            self.old_attributes['bullets'][bullet.id] = {
+                'position': bullet.rect.topleft,
+                'direction': bullet.direction,
+                'live': bullet.live,
+                'speed': bullet.speed,
+                'is_move': bullet.is_move
+            }
+
+        for wall in self.walls:
+            self.old_attributes['walls'][wall.id] = {
+                'position': wall.rect.topleft,
+                'type': wall.type,
+                'live': wall.live,
+                'hp': wall.hp
+            }
+
+        for explosion in self.explosions:
+            self.old_attributes['explosions'][explosion.id] = {
+                'position': explosion.rect.topleft,
+            }
+
+    def record_change(self):
+        self.change_attributes['tanks'] = []
+        self.change_attributes['bullets'] = []
+        self.change_attributes['walls'] = []
+        self.change_attributes['explosions'] = []
+
+        all_tanks = [self.my_tank, self.teammate_tank] + list(self.enemy_tanks)
+        for tank in all_tanks:
+            if not tank:
+                continue
+
+            old_tank = self.old_attributes['tanks'].get(tank.id)
+            is_move = tank.rect.topleft != old_tank['position'] if old_tank else False
+            tank.is_move = is_move
+
+            # 判断是否产生变化：新实体 或 属性发生改变
+            changed = (not old_tank or
+                       tank.direction[0] != old_tank['direction'] or
+                       is_move != old_tank['is_move'] or
+                       tank.live != old_tank['live'])
+
+            if changed:
+                self.change_attributes['tanks'].append({
+                    'id': tank.id,
+                    'position': tank.rect.topleft,
+                    'direction': tank.direction[0],
+                    'live': tank.live,
+                    'hp': tank.hp,
+                    'is_move': is_move
+                })
+
+        all_bullets = list(self.my_bullets) + list(self.enemy_bullets)
+        for bullet in all_bullets:
+            old_bullet = self.old_attributes['bullets'].get(bullet.id)
+            # 判断子弹状态是否变化：新实体 或 生存状态改变
+            if not old_bullet or bullet.live != old_bullet['live']:
+                self.change_attributes['bullets'].append({
+                    'id': bullet.id,
+                    'position': bullet.rect.topleft,
+                    'direction': bullet.direction,
+                    'live': bullet.live,
+                    'speed': bullet.speed,
+                    'is_move': bullet.is_move
+                })
+
+        for wall in self.walls:
+            old_wall = self.old_attributes['walls'].get(wall.id)
+            # 检测墙状态是否变化：新实体 或 生存状态改变
+            if not old_wall or wall.live != old_wall['live']:
+                self.change_attributes['walls'].append({
+                    'id': wall.id,
+                    'position': wall.rect.topleft,
+                    'type': wall.type,
+                    'live': wall.live,
+                    'hp': wall.hp
+                })
+
+        for explosion in self.explosions:
+            old_explosion = self.old_attributes['explosions'].get(explosion.id)
+            # 检测爆炸状态是否变化：新实体 或 生存状态改变
+            if not old_explosion:
+                self.change_attributes['explosions'].append({
+                    'id': explosion.id,
+                    'position': explosion.rect.topleft,
+                    'type': explosion.type
+                })
+    #初始化游戏数据后，将所有实体记录
+    def record_all_attributes(self):
+        self.change_attributes['tanks'] = []
+        self.change_attributes['walls'] = []
+
+        all_tanks = [self.my_tank, self.teammate_tank] + list(self.enemy_tanks)
+        for tank in all_tanks:
+            self.change_attributes['tanks'].append({
+                'id': tank.id,
+                'position': tank.rect.topleft,
+                'direction': tank.direction[0],
+                'live': tank.live,
+                'hp': tank.hp,
+                'is_move': False
+            })
+
+
+        for wall in self.walls:
+            self.change_attributes['walls'].append({
+                'id': wall.id,
+                'position': wall.rect.topleft,
+                'type': wall.type,
+                'live': wall.live,
+                'hp': wall.hp
+            })
 
 class MainGame:
     window = None
@@ -519,7 +646,6 @@ class MainGame:
 
     def __init__(self):
 
-
         self.normal_variables = NormalVariables()
 
         self.panel_x = None
@@ -538,13 +664,6 @@ class MainGame:
 
         self.fire_music = Sound(cfg.AUDIO_PATHS['fire'])
         self.hit_music = Sound(cfg.AUDIO_PATHS['hit'])
-
-    def init_image_size(self):
-        scene_sizes = {}
-        for key, path in cfg.SCENE_IMAGE_PATHS.items():
-            img = pygame.image.load(path)
-            scene_sizes[key] = img.get_size()
-        cfg.SCENES_SIZE = scene_sizes
 
     def start_game(self, level='1'):
         """启动游戏，可指定关卡"""
@@ -568,7 +687,7 @@ class MainGame:
         self.tanks_event=TanksEvent(self.my_tank,self.teammate_tank, self.enemy_tanks,self.my_bullets ,self.enemy_bullets, self.walls, self.all_collision, nv)
         self.tanks_event.tank_creation()
 
-        self.remote_event=RemoteEvent(self.network_handler)
+        self.remote_event=RemoteEvent(self.network_handler,self.my_tank,self.enemy_tanks,self.teammate_tank,self.my_bullets,self.enemy_bullets, self.walls,self.explosions,nv)
         self.game_result_event=GameResultEvent(nv,self.my_tank,self.teammate_tank,self.enemy_tanks)
         self.collision_event=CollisionEvent(self.my_tank,self.teammate_tank, self.enemy_tanks,self.my_bullets ,self.enemy_bullets, self.walls, self.explosions, nv)
 
@@ -587,17 +706,13 @@ class MainGame:
             pygame.display.update()
 
     def start_multiplayer_game(self, mode='host', level='1'):
-        """启动多人游戏
-        Args:
-            mode: 'host' 创建主机, 'join' 加入游戏
-            level: 关卡编号
-        """
         self.network_mode = mode
         self.is_multiplayer = True
 
         # 初始化网络
         self.network_handler = ServerHandler(level, port=12345)
-        self.network_handler.create_host()
+        while not self.network_handler.is_connected:
+            time.sleep(1)
 
         # 启动游戏窗口
         MainGame.window = pygame.display.set_mode((cfg.WIDTH + cfg.PANEL_WIDTH, cfg.HEIGHT))
@@ -609,25 +724,34 @@ class MainGame:
 
         MainGame.clock = pygame.time.Clock()
 
+        nv = self.normal_variables
+        nv.window = MainGame.window
+        self.scenes_event = ScenesEvent(self.all_collision, self.walls, nv)
         # 加载指定关卡
         self.load_lvl(str(level))
-        Music(cfg.AUDIO_PATHS['start']).play_music()
-        self.create_all_players()
+        # Music(cfg.AUDIO_PATHS['start']).play_music()
 
+        self.tanks_event = TanksEvent(self.my_tank, self.teammate_tank, self.enemy_tanks, self.my_bullets,
+                                      self.enemy_bullets, self.walls, self.all_collision, nv)
+        self.tanks_event.tank_creation()
+        self.remote_event = RemoteEvent(self.network_handler, self.my_tank, self.enemy_tanks, self.teammate_tank,
+                                        self.my_bullets, self.enemy_bullets, self.walls, self.explosions, nv)
+        self.game_result_event = GameResultEvent(nv, self.my_tank, self.teammate_tank, self.enemy_tanks)
+        self.collision_event = CollisionEvent(self.my_tank, self.teammate_tank, self.enemy_tanks, self.my_bullets,
+                                              self.enemy_bullets, self.walls, self.explosions, nv)
+
+        self.bullet_event = BulletsEvent(self.my_bullets, self.enemy_bullets, self.normal_variables)
+        # 发送初始化数据
+        self.remote_event.send_init_attributes()
         # 游戏主循环
         try:
             while True:
                 MainGame.clock.tick(cfg.INITIAL_TICK)
 
                 self.get_event()
+
                 self.update()
-
-                if self.network_handler and self.network_handler.is_connected:
-                    self.send_change_events()
-
                 self.render()
-
-                # 发送本地玩家状态
 
                 pygame.display.update()
         finally:

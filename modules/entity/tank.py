@@ -14,19 +14,24 @@ class Tank(Sprite):
         self.owner_window = window
         self.game_window_size = game_window_size
 
-        self.id = tank_id
+
 
         self.images = None
-        self.direction = None
+
         self.image = None
-        self.rect = None
+
 
         self.current_frame = 0
         self.animation_timer = 0
         self.animation_interval = 100
 
-        self.hp=3
+        self.rect = None
+        self.id = tank_id
+        self.hp =3
         self.live = True
+        self.is_move = False
+        self.direction = None
+
         self.last_dead_time = 0
 
         self.speed = 2
