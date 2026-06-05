@@ -3,8 +3,9 @@ from modules.tool.time import *
 from globalCache import *
 
 class Explode(Sprite):
-    def __init__(self, tank,position= None):
+    def __init__(self, tank,position= None, explode_id=None):
         super().__init__()
+        self.id = explode_id if explode_id is not None else id(self)
         self.images= OtherImageCache.get_boom_image()
         self.image = self.images[0]
         self.rect=self.image.get_rect()
@@ -30,8 +31,9 @@ class Explode(Sprite):
             self.step = 0
             self.live = False
 class BulletExplode(Sprite):
-    def __init__(self, bullet,position= None):
+    def __init__(self, bullet,position= None, explode_id=None):
         super().__init__()
+        self.id = explode_id if explode_id is not None else id(self)
         self.images= OtherImageCache.get_boom_image()[0:3]
         self.image = self.images[0]
         self.rect=self.image.get_rect()

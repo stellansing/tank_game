@@ -69,11 +69,6 @@ class TankImageCache:
 
                 cls._cache[enemy_key].append(direction_images)
 
-
-        # cls._cache['appear'] = pygame.image.load(cfg.OTHER_IMAGE_PATHS.get('appear')).convert_alpha()
-        # cls._cache['protected_mask'] = pygame.image.load(cfg.OTHER_IMAGE_PATHS.get('protect')).convert_alpha()
-        # cls._cache['boom_static'] = pygame.image.load(cfg.OTHER_IMAGE_PATHS.get('boom_static')).convert_alpha()
-
     @classmethod
     def get_player_tank_image(cls, player_key, level):
         if player_key in cls._cache and level < len(cls._cache[player_key]):
@@ -91,18 +86,6 @@ class TankImageCache:
         if tank_type in cls._cache and level < len(cls._cache[tank_type]):
             return cls._cache[tank_type][level]
         return None
-
-    # @classmethod
-    # def get_appear_image(cls):
-    #     return cls._cache.get('appear')
-    #
-    # @classmethod
-    # def get_protected_mask(cls):
-    #     return cls._cache.get('protected_mask')
-    #
-    # @classmethod
-    # def get_boom_image(cls):
-    #     return cls._cache.get('boom_static')
 
 class OtherImageCache:
     _cache = {}

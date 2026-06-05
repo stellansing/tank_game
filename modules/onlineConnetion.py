@@ -15,7 +15,10 @@ class UDPNetwork:
         self.level = level
 
 
-        self.is_update = False
+        self.is_updated = False
+        self.receive_datas = None
+        self.receive_data_check = None  # 接收客户端的数据校验
+        self.client_ready = False  # 客户端是否已完成初始数据加载
         
         # 玩家数据
         self.players = []
@@ -71,18 +74,15 @@ class UDPNetwork:
             
         try:
             # 如果没有指定主机IP，使用广播查找
-            host_ips=None
             if host_ip is None:
                 host_ips = self._find_host()
-
-                if len(host_ips)==0:
+                if host_ips is None or len(host_ips) == 0:
                     print("未找到可用的主机")
                     return False
-                else:
-                    host_ip = host_ips[0][0]
-                    print(f"已找到主机: {host_ip}")
+                host_ip = host_ips[0][0]
+                self.level = host_ips[0][1]
+                print(f"已找到主机: {host_ip}")
 
-            self.level = host_ips[0][1]
             self.local_address = (host_ip, self.port)
             self.connected = True
             self.running = True
@@ -139,7 +139,7 @@ class UDPNetwork:
         """接收消息的后台线程"""
         while self.running:
             try:
-                data, address = self.socket.recvfrom(4096)
+                data, address = self.socket.recvfrom(65536)
                 message = json.loads(data.decode('utf-8'))
                 self._handle_message(message, address)
             except socket.timeout:
@@ -161,10 +161,12 @@ class UDPNetwork:
             # 处理加入请求
             player = {'tank': None, 'bullets': [], 'last_update': time.time(),'address': address}
             self.players.append(player)
+            self.connected_address = address
             # 发送确认和当前游戏状态
             self.send_message({
                 'type': 'join_confirm',
-                'player_count': len(self.players)
+                'player_count': len(self.players),
+                'level': self.level
             }, address)
             
         elif msg_type == 'join_confirm' and not self.is_host:
@@ -190,6 +192,15 @@ class UDPNetwork:
                     del self.players[i]
                     print(f"玩家 {address} 已断开")
                     break
+
+        elif msg_type == 'load_complete' and self.is_host:
+            # 客户端完成初始数据加载
+            self.client_ready = True
+            print(f"客户端 {address} 已完成初始数据加载")
+
+        elif msg_type == 'data_check' and self.is_host:
+            # 接收客户端数据校验
+            self.receive_data_check = message.get('data')
 
     def send_message(self, message, address=None):
         """发送消息"""
@@ -237,10 +248,11 @@ class ServerHandler:
         self.is_connected=self.network.create_host()
         self.connected_address=self.network.connected_address
         self.level=level
+        self._received_keyboard_events = None
 
 
     def run(self):
-        """运行服务器"""
+        """获取接收到的键盘事件"""
         data = None
         if self.network.is_updated:
             data = self.network.receive_datas
@@ -249,29 +261,40 @@ class ServerHandler:
             return data
         return None
 
+    def get_data_check(self):
+        """获取客户端发送的数据校验"""
+        data = None
+        if self.network.receive_data_check is not None:
+            data = self.network.receive_data_check
+            self.network.receive_data_check = None
+        return data
+
     def send_entity_data(self, data):
-        """发送数据"""
+        """发送实体数据到所有已连接的客户端"""
         message={
             'type': 'entity_update',
             'data': data
         }
-        self.network.send_message(message, self.connected_address)
+        # 广播给所有已连接的玩家
+        for player in self.network.players:
+            self.network.send_message(message, player.get('address'))
 
     def disconnect(self):
         """断开连接"""
         self.network.disconnect()
 
 class ClientHandler:
-    def __init__(self,port=5000):
+    def __init__(self,port=5001):
         self.network = UDPNetwork(1,port)
 
-        self.is_connected=self.network.create_host()
+        self.is_connected=self.network.join_game()
         self.connected_address=self.network.connected_address
         self.level=self.network.level
+        self._received_entity_data = None
 
 
     def run(self):
-        """运行服务器"""
+        """获取接收到的实体数据"""
         data = None
         if self.network.is_updated:
             data = self.network.receive_datas
@@ -285,7 +308,32 @@ class ClientHandler:
             'type': 'keyboard_event',
             'data': data
         }
-        self.network.send_message(message, self.connected_address)
+        # 使用network中动态更新的connected_address
+        addr = self.network.connected_address
+        if addr:
+            self.network.send_message(message, addr)
+
+    def send_data_check(self, data):
+        """发送数据校验给主机（格式与服务端entity_update一致）"""
+        message = {
+            'type': 'data_check',
+            'data': data
+        }
+        addr = self.network.connected_address
+        if addr:
+            self.network.send_message(message, addr)
 
     def get_level(self):
         return self.level
+
+    def send_load_complete(self):
+        """向主机发送加载完成确认"""
+        message = {'type': 'load_complete'}
+        addr = self.network.connected_address
+        if addr:
+            self.network.send_message(message, addr)
+            print("已发送加载完成确认")
+
+    def disconnect(self):
+        """断开连接"""
+        self.network.disconnect()

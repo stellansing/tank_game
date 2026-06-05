@@ -79,12 +79,9 @@ AUDIO_PATHS = {
 			}
 
 
-SCENES_SIZE={}
 '''初始化常量'''
 WIDTH = 624
 HEIGHT = 624
-# BORDER_LEN = 3
-# GRID_SIZE = 24
 PANEL_WIDTH = 100
 
 

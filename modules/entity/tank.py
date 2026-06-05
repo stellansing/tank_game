@@ -81,8 +81,6 @@ class Tank(Sprite):
             return bullet
         return None
 
-    def dead(self):
-        self.live = False
 class MyTank(Tank):
     def __init__(self,position,window,game_window_size:tuple,tank_id):
         super().__init__(position,window,game_window_size,tank_id)
@@ -93,15 +91,14 @@ class MyTank(Tank):
         self.rect = self.image.get_rect()
         self.rect.left, self.rect.top = position
 
-        self.hp = 3
 class EnemyTank(Tank):
     def __init__(self, position, window, game_window_size:tuple, tank_id):
         super().__init__(position, window, game_window_size, tank_id)
 
         self.enemy_type = '1'
         self.images = TankImageCache.get_enemy_tank_image(self.enemy_type,0)
-        self.direction = self.rand_direction()
-        self.image = self.images[f"{self.direction}1"]
+        self.direction = self.rand_direction() + '1'
+        self.image = self.images[self.direction]
         self.rect = self.image.get_rect()
         self.rect.left, self.rect.top = position
 
