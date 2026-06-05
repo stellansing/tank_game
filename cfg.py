@@ -1,6 +1,7 @@
 
 import os
 
+
 '''字体'''
 FONTPATH = os.path.join(os.getcwd(), 'resources/font/simsun.ttf')
 '''图片'''
