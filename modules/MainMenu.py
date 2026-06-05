@@ -1,7 +1,6 @@
 import pygame
 import cfg
 from modules.LoadGame import *
-from modules.ClientLoadGame import *
 import os
 
 class Button:
@@ -426,22 +425,7 @@ class MainMenu:
                             game.start_game(str(selected_level))
 
                     elif self.multi_player_button.is_clicked(event.pos):
-                        # 点击多人游戏，进入多人游戏菜单
-                        print("进入多人游戏菜单")
-                        multiplayer_menu = MultiplayerMenu()
-                        selected_mode = multiplayer_menu.run()
-                        
-                        if selected_mode is not None:
-                            if selected_mode == 'host':
-                                # 创建房间
-                                print("创建房间")
-                                load_game = MainGame()
-                                load_game.start_multiplayer_game()
-                            elif selected_mode == 'join':
-                                # 加入房间
-                                print("加入房间")
-                                load_game = ClientMainGame()
-                                load_game.start_multiplayer_game()
+                       pass
 
     def quit_game(self):
         self.running = False
