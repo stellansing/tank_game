@@ -1,16 +1,20 @@
 import pygame
 from pygame.sprite import groupcollide, spritecollide
 import os
+import time
 
 from modules.tool.music import *
 from modules.entity.tank import *
 from modules.tool.explode import *
 from modules.entity.scenes import *
 from modules.entity.bullet import *
+from modules.network import HostNetwork, ClientNetwork
+from modules.network.protocol import GameStateSnapshot, NetworkMessage, InputData
 import cfg
 
 class NormalVariables:
     def __init__(self):
+        self.teammate_reborn_position = None
         self.total_enemy_tanks = 0
         self.total_created_enemy_tanks = 0
         self.max_enemy_tanks = None
@@ -180,9 +184,10 @@ class TanksEvent:
                 tank.rect.left -= offset
             old_rect.left = tank.rect.left
 
-    def tank_reborn(self, tank):
+    def tank_reborn(self, tank, position=None):
         nv = self.normal_variables
-        position = nv.initial_reborn_position
+        if not position:
+            position = nv.initial_reborn_position
         tank.rect.left, tank.rect.top = position
         tank.direction = 'U1'
         other_tanks = Group([t for t in MainGame.all_collision if t != tank])  # 考虑n*n矩阵，空间换时间
@@ -263,9 +268,10 @@ class ScenesEvent:
         pass
 
 class CollisionEvent:
-    def __init__(self, my_tank,enemy_tanks,my_bullets ,enemy_bullets, walls, explosions, normal_variables):
+    def __init__(self, my_tank,enemy_tanks,my_bullets ,enemy_bullets, walls, explosions, normal_variables, teammate_tank=None):
         self.normal_variables = normal_variables
         self.my_tank = my_tank
+        self.teammate_tank = teammate_tank
         self.enemy_tanks = enemy_tanks
 
         self.my_bullets = my_bullets
@@ -313,7 +319,13 @@ class CollisionEvent:
                 collision_results['explosion'].append(tank)
 
         #子弹碰撞
-        groupcollide(self.enemy_bullets, self.my_bullets, True, True)
+        hits=groupcollide(self.enemy_bullets, self.my_bullets, True, True)
+        for enemy_bullet, my_bullets in hits.items():
+            if enemy_bullet.owner_tank:
+                enemy_bullet.owner_tank.bullet_live=False
+            for my_bullet in my_bullets:
+                if my_bullet.owner_tank:
+                    my_bullet.owner_tank.bullet_live=False
 
         # 我方坦克和子弹的碰撞
         if self.my_tank and self.my_tank.live:
@@ -328,6 +340,20 @@ class CollisionEvent:
                 for bullet in hits:
                         if bullet.owner_tank:
                             bullet.owner_tank.bullet_live = False
+
+        # 队友坦克和子弹的碰撞
+        if self.teammate_tank and self.teammate_tank.live:
+            hits = spritecollide(self.teammate_tank, self.enemy_bullets, False, collided=self.default_collided)
+            if hits:
+                self.teammate_tank.hp -= 1
+                self.teammate_tank.live = False
+                self.teammate_tank.kill()
+                collision_results['explosion'].append(self.teammate_tank)
+                self.tank_dead(self.teammate_tank)
+
+                for bullet in hits:
+                    if bullet.owner_tank:
+                        bullet.owner_tank.bullet_live = False
 
         for tank in collision_results['explosion']:
             self.create_explosion(tank)
@@ -385,9 +411,10 @@ class CollisionEvent:
         # self.hit_music.play_music()
 
 class GameResultEvent:
-    def __init__(self, normal_variables,my_tank,enemy_tanks):
+    def __init__(self, normal_variables,my_tank,enemy_tanks, teammate_tank=None):
         self.normal_variables = normal_variables
         self.my_tank = my_tank
+        self.teammate_tank = teammate_tank
         self.enemy_tanks = enemy_tanks
 
     def game_result_update(self):
@@ -396,8 +423,10 @@ class GameResultEvent:
         self.game_result_check()
 
     def game_lose_check(self):
+        # 双人模式：所有玩家都死亡才算输
         if self.my_tank and self.my_tank.hp <= 0:
-            self.normal_variables.game_lose = True
+            if self.teammate_tank is None or self.teammate_tank.hp <= 0:
+                self.normal_variables.game_lose = True
 
     def game_win_check(self):
         if self.normal_variables.remaining_enemies <= 0:
@@ -649,3 +678,716 @@ class MainGame:
         print("退出游戏")
         pygame.quit()
         exit()
+
+
+class MultiplayerGame:
+    """
+    多人联机游戏管理器
+    Host端: 运行权威游戏逻辑 + 网络同步
+    Client端: 纯渲染端，接收并渲染Host状态
+    """
+
+    def __init__(self, host_network=None, host_ip=None):
+        #主机则传入network对象并依据此判断标记
+        self._host_network = host_network
+        self._host_ip = host_ip
+        self._client_network = None
+        self._is_host = host_network is not None
+
+        # 游戏变量
+        self._window = None
+        self._clock = None
+        self._running = False
+        self._panel_x = None
+
+        # Host端：队友坦克（客户端控制的坦克）
+        self._teammate_tank = None
+        self.last_teammate_direction= None
+        self.last_is_teammate_shot = True
+
+        # Client端：渲染用的精灵组
+        self._render_tanks = pygame.sprite.Group()
+        self._render_bullets = pygame.sprite.Group()
+        self._render_walls = pygame.sprite.Group()
+        self._render_explosions = pygame.sprite.Group()
+
+        # 关卡数据（Client端从Host接收）
+        self._level_config = None
+        self._walls_data = None
+        self._game_started = False
+
+        # 帧计数
+        self._frame_counter = 0
+
+        # 主机端使用的MainGame实例
+        self._main_game = None
+
+    def start_game(self, level='1', is_host=True):
+        if is_host:
+            self._start_as_host(level)
+        else:
+            self._start_as_client()
+
+    # ==================== Host端 ====================
+
+    def _start_as_host(self, level):
+        """Host端：运行权威游戏逻辑并同步到客户端"""
+        # 初始化游戏
+        MainGame.window = pygame.display.set_mode((cfg.WIDTH + cfg.PANEL_WIDTH, cfg.HEIGHT))
+        pygame.font.init()
+        pygame.display.set_caption(cfg.TITLE + " - Host")
+
+        TankImageCache.initialize(cfg)
+        OtherImageCache.initialize(cfg)
+
+        MainGame.clock = pygame.time.Clock()
+        self._window = MainGame.window
+
+        # 创建NormalVariables
+        self.nv = NormalVariables()
+        self.nv.window = self._window
+        self.nv.is_multiplayer = True
+
+        # 创建SceneEvent并加载关卡
+        self._scenes_event = ScenesEvent(
+            MainGame.all_collision, MainGame.walls, self.nv
+        )
+        self._load_level_for_host(level)
+
+        # 发送关卡数据给客户端
+        self._send_level_data_to_client()
+
+        # 创建Host玩家的坦克
+        player_pos = self.nv.initial_reborn_position
+        teammate_pos = self.nv.teammate_reborn_position
+
+        # 先创建Host坦克（TanksEvent需要引用）
+        self._create_host_tank(player_pos)
+
+        # 创建TanksEvent
+        self._tanks_event = TanksEvent(
+            self._my_tank, MainGame.enemy_tanks,
+            MainGame.my_bullets, MainGame.enemy_bullets,
+            MainGame.walls, MainGame.all_collision, self.nv
+        )
+
+        # 创建队友坦克（客户端控制）
+        self._create_teammate_tank(teammate_pos)
+
+        # 设置已分配的ID以避免冲突
+        self._tanks_event.allocated_tank_id = 2
+        self._tanks_event.allocated_bullet_id = 0
+
+        # 初始化其他事件
+        self._game_result_event = GameResultEvent(
+            self.nv, self._my_tank, MainGame.enemy_tanks,
+            teammate_tank=self._teammate_tank
+        )
+        self._collision_event = CollisionEvent(
+            self._my_tank, MainGame.enemy_tanks,
+            MainGame.my_bullets, MainGame.enemy_bullets,
+            MainGame.walls, MainGame.explosions, self.nv,
+            teammate_tank=self._teammate_tank
+        )
+        self._bullet_event = BulletsEvent(
+            MainGame.my_bullets, MainGame.enemy_bullets, self.nv
+        )
+        self._panel_x = cfg.WIDTH + 10
+
+        # 通知客户端游戏开始
+        self._host_network.send_game_start()
+        self._game_started = True
+
+        # 主游戏循环
+        self._running = True
+        while self._running:
+            MainGame.clock.tick(cfg.INITIAL_TICK)
+            #暂未使用帧计数
+            self._frame_counter += 1
+
+            self._get_host_events()
+            self._update_host()
+            self._render_host()
+
+            # 网络更新
+            self._host_network.update()
+
+            # 同步状态到客户端
+            self._sync_to_client()
+
+            pygame.display.update()
+
+        self._host_network.close()
+
+    def _load_level_for_host(self, level):
+        """Host端加载关卡（复用MainGame的load_lvl逻辑）"""
+        nv = self.nv
+        path = os.path.join(cfg.LEVELFILEDIR, f'{level}.lvl')
+        if not os.path.exists(path):
+            path = os.path.join(cfg.LEVELFILEDIR, '1.lvl')
+
+        with open(path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+
+        # 清除现有对象
+        MainGame.walls.empty()
+        MainGame.enemy_tanks.empty()
+        MainGame.all_collision.empty()
+        MainGame.my_bullets.empty()
+        MainGame.enemy_bullets.empty()
+        MainGame.explosions.empty()
+
+        config = {}
+        num_row = 0
+        walls_list = []
+
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if line.startswith('%TOTALENEMYNUM:'):
+                config['total_enemy_num'] = int(line.split(':')[1])
+            elif line.startswith('%MAXENEMYNUM:'):
+                config['max_enemy_num'] = int(line.split(':')[1])
+            elif line.startswith('%HOMEPOS:'):
+                pos_str = line.split(':')[1]
+                x, y = map(int, pos_str.split(','))
+                config['home_pos'] = (x, y)
+            elif line.startswith('%HOMEAROUNDPOS:'):
+                pos_str = line.split(':')[1]
+                positions = []
+                for pos in pos_str.split():
+                    x, y = map(int, pos.split(','))
+                    positions.append((x, y))
+                config['home_around_pos'] = positions
+            elif line.startswith('%PLAYERTANKPOS:'):
+                pos_str = line.split(':')[1]
+                positions = []
+                for pos in pos_str.split():
+                    x, y = map(int, pos.split(','))
+                    positions.append((x, y))
+                config['player_tank_pos'] = positions
+            elif line.startswith('%ENEMYTANKPOS:'):
+                pos_str = line.split(':')[1]
+                positions = []
+                for pos in pos_str.split():
+                    x, y = map(int, pos.split(','))
+                    positions.append((x * nv.cell_len, y * nv.cell_len))
+                config['enemy_tank_pos'] = positions
+            elif line and not line.startswith('#') and not line.startswith('%'):
+                for row_i, elem in enumerate(line.split(' ')):
+                    pos = (row_i * nv.cell_len, num_row * nv.cell_len)
+                    self._scenes_event.scenes_creation(elem, pos)
+                    walls_list.append({'type': elem, 'x': pos[0], 'y': pos[1]})
+                num_row += 1
+
+        self._level_config = config
+        self._walls_data = walls_list
+
+        nv.max_enemy_tanks = config.get('max_enemy_num', 6)
+        nv.total_enemy_tanks = config.get('total_enemy_num', 12)
+        nv.remaining_enemies = nv.total_enemy_tanks
+        player_positions = config.get('player_tank_pos', [(8, 24), (16, 24)])
+        nv.initial_reborn_position = (player_positions[0][0] * nv.cell_len, player_positions[0][1] * nv.cell_len)
+        if len(player_positions) > 1:
+            nv.teammate_reborn_position = (player_positions[1][0] * nv.cell_len, player_positions[1][1] * nv.cell_len)
+        else:
+            nv.teammate_reborn_position = nv.initial_reborn_position
+        nv.enemy_tanks_positions = config.get('enemy_tank_pos', [(0, 0), (288, 0), (576, 0)])
+
+    def _send_level_data_to_client(self):
+        """发送关卡数据给客户端"""
+        level_config_for_client = {
+            'cell_len': self.nv.cell_len,
+            'window_size': self.nv.window_size,
+            'total_enemy_num': self.nv.total_enemy_tanks,
+            'remaining_enemies': self.nv.remaining_enemies,
+        }
+        self._host_network.send_level_data(level_config_for_client, self._walls_data)
+        # 等待一小段时间确保客户端收到
+        time.sleep(0.1)
+
+    def _create_host_tank(self, position):
+        """创建Host玩家的坦克"""
+        tank_id = 0
+        self._my_tank = MyTank(
+            position, self._window, self.nv.window_size,
+            tank_id, player_key='player1'
+        )
+        MainGame.all_collision.add(self._my_tank)
+        MainGame.my_tank = self._my_tank
+
+    def _create_teammate_tank(self, position):
+        """创建队友（客户端控制）的坦克"""
+        self._teammate_tank = MyTank(
+            position, self._window, self.nv.window_size,
+            1, player_key='player2'
+        )
+        MainGame.all_collision.add(self._teammate_tank)
+
+
+    def _get_host_events(self):
+        """Host端事件处理：本地键盘 + 网络输入"""
+        nv = self.nv
+        event_list = pygame.event.get()
+        for event in event_list:
+            if event.type == pygame.QUIT:
+                self._running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_LEFT and 'L' not in nv.key_order:
+                    nv.key_order.append('L')
+                elif event.key == pygame.K_RIGHT and 'R' not in nv.key_order:
+                    nv.key_order.append('R')
+                elif event.key == pygame.K_UP and 'U' not in nv.key_order:
+                    nv.key_order.append('U')
+                elif event.key == pygame.K_DOWN and 'D' not in nv.key_order:
+                    nv.key_order.append('D')
+            if event.type == pygame.KEYUP:
+                if event.key == pygame.K_LEFT and 'L' in nv.key_order:
+                    nv.key_order.remove('L')
+                elif event.key == pygame.K_RIGHT and 'R' in nv.key_order:
+                    nv.key_order.remove('R')
+                elif event.key == pygame.K_UP and 'U' in nv.key_order:
+                    nv.key_order.remove('U')
+                elif event.key == pygame.K_DOWN and 'D' in nv.key_order:
+                    nv.key_order.remove('D')
+        nv.keys_pressed = pygame.key.get_pressed()
+
+        # 处理客户端输入
+        client_input = self._host_network.latest_input
+        if self._teammate_tank and self._teammate_tank.live:
+            if client_input:
+                self._process_client_input(client_input)
+            else:
+                self._continue_client_input()
+    def _continue_client_input(self):
+        """未收到输入信息时，自动移动队友坦克并射击"""
+        # 移动队友坦克
+        if self.last_teammate_direction:
+            self._teammate_move(self.last_teammate_direction)
+
+        # 射击
+        if self.last_is_teammate_shot:
+            bullet = self._teammate_tank.shot(
+                self._tanks_event.allocated_bullet_id
+            )
+            if bullet:
+                self._tanks_event.allocated_bullet_id += 1
+                MainGame.my_bullets.add(bullet)
+    def _process_client_input(self, input_data):
+        """处理客户端输入，移动队友坦克并射击"""
+
+        # 移动队友坦克
+        if input_data.key_order:
+            direction = input_data.key_order[-1]
+            self.last_teammate_direction = direction
+            self._teammate_move(direction)
+        else:
+            self.last_teammate_direction = None
+
+        # 射击
+        if input_data.space_pressed:
+            self.last_is_teammate_shot = True
+            bullet = self._teammate_tank.shot(
+                self._tanks_event.allocated_bullet_id
+            )
+            if bullet:
+                self._tanks_event.allocated_bullet_id += 1
+                MainGame.my_bullets.add(bullet)
+        else:
+            self.last_is_teammate_shot = False
+
+    def _teammate_move(self, direction):
+        """移动队友坦克（复用player_tank_move逻辑）"""
+        if not self._teammate_tank or not self._teammate_tank.live:
+            return
+
+        old_rect = self._teammate_tank.rect.copy()
+        old_direction = self._teammate_tank.direction
+
+        self._teammate_tank.move(direction)
+
+        if old_direction[0] != direction:
+            self._tanks_event.move_check(self._teammate_tank, direction, old_rect)
+
+        other_tanks = pygame.sprite.Group([t for t in MainGame.all_collision if t != self._teammate_tank])
+        if pygame.sprite.spritecollideany(self._teammate_tank, other_tanks):
+            self._teammate_tank.rect = old_rect
+
+    def _update_host(self):
+        """Host端游戏逻辑更新"""
+        self._tanks_event.tanks_update()
+        self._bullet_event.bullets_update()
+        self._collision_event.collision_update()
+
+        # 队友坦克复活检查
+        if self._teammate_tank and not self._teammate_tank.live:
+            if pygame.time.get_ticks() - self._teammate_tank.last_dead_time > self.nv.reborn_interval:
+                if self._teammate_tank.hp > 0:
+                    self._tanks_event.tank_reborn(self._teammate_tank, self.nv.teammate_reborn_position)
+
+        # 菜单
+        self._panel_x = cfg.WIDTH + 10
+
+    def _render_host(self):
+        """Host端渲染"""
+        self._window.fill((0, 0, 0))
+        background_image = pygame.image.load(cfg.OTHER_IMAGE_PATHS['background'])
+        self._window.blit(background_image, (0, 0))
+
+        self._tanks_event.render()
+        self._bullet_event.render()
+        self._scenes_event.render()
+
+        # 渲染队友坦克
+        if self._teammate_tank and self._teammate_tank.live:
+            self._teammate_tank.display_tank()
+
+        self._game_result_event.game_result_update()
+        self._collision_event.render()
+
+        # 检查游戏是否结束，通知客户端（只发送一次）
+        #_game_over_sent仅仅使用一次
+        if not getattr(self, '_game_over_sent', False):
+            if self.nv.game_win:
+                self._host_network.send_game_over('win')
+                self._game_over_sent = True
+            elif self.nv.game_lose:
+                self._host_network.send_game_over('lose')
+                self._game_over_sent = True
+
+        # 信息面板
+        enemy_text = self.get_text_surface(f"敌人: {self.nv.remaining_enemies}", 20)
+        self._window.blit(enemy_text, (self._panel_x, 10))
+
+        font = pygame.font.Font(cfg.FONTPATH, 20)
+        if self._my_tank:
+            hp_text = font.render(f"P1血量: {self._my_tank.hp}", True, pygame.Color(255, 0, 0))
+            self._window.blit(hp_text, (self._panel_x, 50))
+        if self._teammate_tank:
+            hp_text = font.render(f"P2血量: {self._teammate_tank.hp}", True, pygame.Color(0, 255, 0))
+            self._window.blit(hp_text, (self._panel_x, 80))
+
+    def _sync_to_client(self):
+        """发送游戏状态快照到客户端"""
+        snapshot = GameStateSnapshot()
+
+        # 收集坦克数据
+        if self._my_tank:
+            snapshot.tanks.append(
+                NetworkMessage.tank_to_data(self._my_tank, 'player1', is_host=True)
+            )
+        if self._teammate_tank:
+            snapshot.tanks.append(
+                NetworkMessage.tank_to_data(self._teammate_tank, 'player2', is_host=False)
+            )
+        for enemy in MainGame.enemy_tanks:
+            snapshot.tanks.append(
+                NetworkMessage.tank_to_data(enemy, 'enemy')
+            )
+
+        # 收集子弹数据
+        for bullet in MainGame.my_bullets:
+            owner_type = 'player1'
+            if bullet.owner_tank and bullet.owner_tank == self._teammate_tank:
+                owner_type = 'player2'
+            snapshot.bullets.append(
+                NetworkMessage.bullet_to_data(bullet, owner_type)
+            )
+        for bullet in MainGame.enemy_bullets:
+            snapshot.bullets.append(
+                NetworkMessage.bullet_to_data(bullet, 'enemy')
+            )
+
+        # 收集墙体数据
+        for wall in MainGame.walls:
+            snapshot.walls.append(NetworkMessage.wall_to_data(wall))
+
+        # 收集爆炸数据
+        for explosion in MainGame.explosions:
+            snapshot.explosions.append(NetworkMessage.explosion_to_data(explosion))
+
+        # 游戏信息
+        snapshot.game_info = NetworkMessage.game_info_to_data(
+            self.nv, self._my_tank, self._teammate_tank
+        )
+
+        self._host_network.send_state(snapshot)
+
+    # ==================== Client端 ====================
+
+    def _start_as_client(self):
+        """Client端：接收并渲染Host的游戏状态"""
+        # 初始化窗口
+        self._window = pygame.display.set_mode((cfg.WIDTH + cfg.PANEL_WIDTH, cfg.HEIGHT))
+        pygame.font.init()
+        pygame.display.set_caption(cfg.TITLE + " - Client")
+
+        TankImageCache.initialize(cfg)
+        OtherImageCache.initialize(cfg)
+
+        self._clock = pygame.time.Clock()
+
+        # 初始化客户端网络
+        self._client_network = ClientNetwork()
+        self._client_network.connect(self._host_ip)
+
+        if not self._client_network.try_connect_handshake():
+            print("[Client] 无法连接到Host")
+            return
+
+        # 等待接收关卡数据
+        print("[Client] 等待接收关卡数据...")
+        self._wait_for_level_data()
+
+        if not self._level_config:
+            print("[Client] 未收到关卡数据")
+            self._client_network.close()
+            return
+
+        # 创建初始墙体
+        self._create_walls_from_data()
+
+        # 等待游戏开始信号
+        print("[Client] 等待游戏开始...")
+        self._wait_for_game_start()
+
+        self._panel_x = cfg.WIDTH + 10
+        self._running = True
+
+        # Client主循环
+        while self._running:
+            self._clock.tick(cfg.INITIAL_TICK)
+            self._frame_counter += 1
+
+            self._get_client_events()
+            self._client_network.update()
+
+            if not self._client_network.is_connected:
+                print("[Client] 与Host断开连接")
+                self._running = False
+                break
+
+            # 处理接收到的状态
+            self._process_received_state()
+
+            # 渲染
+            self._render_client()
+
+            pygame.display.update()
+
+        self._client_network.close()
+
+    def _wait_for_level_data(self, timeout=30.0):
+        """等待接收关卡数据"""
+        start = time.time()
+        while time.time() - start < timeout:
+            self._client_network.update()
+            # 处理pygame事件
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return
+
+            if self._client_network.level_config is not None:
+                self._level_config = self._client_network.level_config
+                self._walls_data = self._client_network.walls_data
+                print(f"[Client] 收到关卡数据")
+                return
+            time.sleep(0.01)
+
+    def _wait_for_game_start(self, timeout=30.0):
+        """等待游戏开始信号"""
+        start = time.time()
+        while time.time() - start < timeout:
+            self._client_network.update()
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return
+
+            if self._client_network.game_started:
+                self._game_started = True
+                print("[Client] 游戏开始!")
+                return
+            time.sleep(0.01)
+
+    def _create_walls_from_data(self):
+        """根据Host发来的数据创建墙体精灵"""
+        self._render_walls.empty()
+        if not self._walls_data:
+            return
+
+        wall_id = 0
+        for wall in self._walls_data:
+            pos = (wall['x'], wall['y'])
+            if wall['type'] == 'B':
+                wall = BrickWall(pos, wall_id)
+                self._render_walls.add(wall)
+                wall_id += 1
+            elif wall['type'] == 'I':
+                wall = SteelWall(pos, wall_id)
+                self._render_walls.add(wall)
+                wall_id += 1
+
+    def _get_client_events(self):
+        """Client端事件处理：仅收集键盘输入并发送"""
+        event_list = pygame.event.get()
+        for event in event_list:
+            if event.type == pygame.QUIT:
+                self._running = False
+
+        # 获取当前按键状态并发送
+        keys = pygame.key.get_pressed()
+        key_order = []
+        if keys[pygame.K_LEFT]:
+            key_order.append('L')
+        if keys[pygame.K_RIGHT]:
+            key_order.append('R')
+        if keys[pygame.K_UP]:
+            key_order.append('U')
+        if keys[pygame.K_DOWN]:
+            key_order.append('D')
+
+        space_pressed = keys[pygame.K_SPACE]
+
+        self._client_network.send_input(key_order, space_pressed)
+
+    def _process_received_state(self):
+        """处理Host发来的状态快照，更新渲染用的精灵"""
+        snapshot = self._client_network.latest_snapshot
+        if snapshot is None:
+            return
+
+        # 更新坦克
+        self._render_tanks.empty()
+        for tank_snap in snapshot.tanks:
+            if not tank_snap.get('live', True):
+                continue
+            tank_type = tank_snap.get('tank_type', 'enemy')
+            pos = (tank_snap['x'], tank_snap['y'])
+
+            if tank_type in ('player1', 'player2'):
+                player_key = tank_type
+                tank = MyTank(pos, self._window, (cfg.WIDTH, cfg.HEIGHT),
+                              tank_snap['id'], player_key=player_key)
+                tank.direction = tank_snap.get('direction', 'U1')
+                tank.hp = tank_snap.get('hp', 3)
+                tank.live = tank_snap.get('live', True)
+                tank.image = tank.images[tank.direction]
+                self._render_tanks.add(tank)
+            else:
+                tank = EnemyTank(pos, self._window, (cfg.WIDTH, cfg.HEIGHT),
+                                 tank_snap['id'])
+                tank.direction = tank_snap.get('direction', 'D1')
+                tank.hp = tank_snap.get('hp', 1)
+                tank.live = tank_snap.get('live', True)
+                tank.image = tank.images[tank.direction]
+                self._render_tanks.add(tank)
+
+        # 更新子弹
+        self._render_bullets.empty()
+        for bullet_snap in snapshot.bullets:
+            bullet = Bullet(None, bullet_snap['id'], position=(bullet_snap['x'], bullet_snap['y']),
+                          direction=bullet_snap['direction'])
+            self._render_bullets.add(bullet)
+
+        # 更新墙体（只在初始加载时创建，后续只更新状态）
+        if snapshot.walls:
+            wall_dict = {wd['id']: wd for wd in snapshot.walls}
+            for wall in self._render_walls:
+                wd = wall_dict.get(wall.id)
+                if wd:
+                    wall.hp = wd.get('hp', 1)
+                    wall.live = wd.get('live', True)
+                    if not wall.live:
+                        wall.kill()
+                else:
+
+                    wall.kill()
+
+
+        # 更新爆炸
+        self._render_explosions.empty()
+        for ed in snapshot.explosions:
+            explode_type = ed.get('explode_type', 'explode')
+            if explode_type == 'explode':
+                exp = Explode(None, position=(ed['x'], ed['y']),
+                            explode_id=ed['id'])
+            else:
+                exp = BulletExplode(None, position=(ed['x'], ed['y']),
+                                  explode_id=ed['id'])
+            exp.step = ed.get('step', 0)
+            if exp.step < len(exp.images):
+                exp.image = exp.images[exp.step]
+            self._render_explosions.add(exp)
+
+        # 检查游戏结束
+        game_info = snapshot.game_info or {}
+        if game_info.get('game_win'):
+            print("[Client] 游戏胜利!")
+        elif game_info.get('game_lose'):
+            print("[Client] 游戏失败!")
+
+        self._snapshot_game_info = game_info
+
+    def _render_client(self):
+        """Client端渲染"""
+        self._window.fill((0, 0, 0))
+        background_image = pygame.image.load(cfg.OTHER_IMAGE_PATHS['background'])
+        self._window.blit(background_image, (0, 0))
+
+        # 渲染墙体
+        for wall in self._render_walls:
+            if wall.live:
+                wall.display_static_entity(self._window)
+
+        # 渲染坦克
+        for tank in self._render_tanks:
+            tank.display_tank()
+
+        # 渲染子弹
+        for bullet in self._render_bullets:
+            bullet.display_bullet(self._window)
+
+        # 渲染爆炸
+        for explosion in self._render_explosions:
+            if explosion.live:
+                explosion.display_explode(self._window)
+
+        # 信息面板
+        game_info = getattr(self, '_snapshot_game_info', {})
+        font = pygame.font.Font(cfg.FONTPATH, 20)
+
+        remaining = game_info.get('remaining_enemies', 0)
+        enemy_text = font.render(f"敌人: {remaining}", True, pygame.Color(255, 0, 0))
+        self._window.blit(enemy_text, (self._panel_x, 10))
+
+        p1_hp = game_info.get('player1_hp', 0)
+        hp_text = font.render(f"P1血量: {p1_hp}", True, pygame.Color(255, 0, 0))
+        self._window.blit(hp_text, (self._panel_x, 50))
+
+        p2_hp = game_info.get('player2_hp', 0)
+        hp_text2 = font.render(f"P2血量: {p2_hp}", True, pygame.Color(0, 255, 0))
+        self._window.blit(hp_text2, (self._panel_x, 80))
+
+        # 游戏结束提示
+        if game_info.get('game_win'):
+            my_font = pygame.font.Font(cfg.FONTPATH, 50)
+            win_text = my_font.render('You Win', True, pygame.Color(255, 0, 0))
+            self._window.blit(win_text, (
+                cfg.WIDTH / 2 - win_text.get_width() / 2,
+                cfg.HEIGHT / 2 - win_text.get_height() / 2
+            ))
+        elif game_info.get('game_lose'):
+            game_over_image = pygame.image.load(cfg.OTHER_IMAGE_PATHS['gameover'])
+            logo_width = 300
+            logo_height = int(game_over_image.get_height() * (logo_width / game_over_image.get_width()))
+            game_over_image = pygame.transform.scale(game_over_image, (logo_width, logo_height))
+            self._window.blit(game_over_image, (
+                cfg.WIDTH / 2 - game_over_image.get_width() / 2,
+                cfg.HEIGHT / 2 - game_over_image.get_height() / 2
+            ))
+
+    def get_text_surface(self, text, size=25):
+        """获取文字表面（供Host端info panel使用）"""
+        my_font = pygame.font.Font(cfg.FONTPATH, size)
+        text_surface = my_font.render(text, True, pygame.Color(255, 0, 0))
+        return text_surface

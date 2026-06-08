@@ -98,9 +98,13 @@ LEVELFILEDIR = os.path.join(os.getcwd(), 'modules/levels')
 '''网络配置'''
 # 默认端口号
 NETWORK_PORT = 5555
+# UDP接收缓冲区大小（字节）
+NETWORK_BUFFER_SIZE = 65536
 # 状态同步间隔（帧数），值越小越流畅但带宽越高
 NETWORK_SYNC_INTERVAL = 2
 # 连接超时（秒）
 NETWORK_TIMEOUT = 10.0
-# 心跳间隔（秒）
-NETWORK_PING_INTERVAL = 1.0
+# 等待客户端连接的超时（秒），0表示不等待直接进入游戏
+NETWORK_ACCEPT_TIMEOUT = 60.0
+# 最大重连尝试次数
+NETWORK_MAX_RECONNECT = 3

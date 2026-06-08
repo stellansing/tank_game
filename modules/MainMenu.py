@@ -1,7 +1,10 @@
 import pygame
 import cfg
 from modules.LoadGame import *
+from modules.network import HostNetwork, ClientNetwork
 import os
+import socket
+import threading
 
 class Button:
     """按钮类"""
@@ -249,8 +252,8 @@ class MultiplayerMenu:
         self.running = True
         while self.running:
             self.clock.tick(60)
-            self.update()
             self.render()
+            self.update()
         
         return self.selected_mode
     
@@ -305,6 +308,205 @@ class MultiplayerMenu:
         print("退出游戏")
         pygame.quit()
         exit()
+
+
+class IPInputDialog:
+    """IP地址输入对话框"""
+
+    def __init__(self, default_ip="127.0.0.1"):
+        self.running = None
+        pygame.display.init()
+        pygame.font.init()
+
+        self.window_size = (cfg.WIDTH, cfg.HEIGHT)
+        self.window = pygame.display.set_mode(self.window_size)
+        pygame.display.set_caption(cfg.TITLE + " - 连接房间")
+
+        self.clock = pygame.time.Clock()
+        self.font = pygame.font.Font(cfg.FONTPATH, 28)
+        self.small_font = pygame.font.Font(cfg.FONTPATH, 20)
+
+        self.ip_text = default_ip
+        self.status_text = ""
+        self.status_color = (255, 255, 255)
+        self.connecting = False
+        self.result = None  # (host_ip, port) or None for back
+
+    def run(self):
+        """运行IP输入对话框，返回 (host_ip, port) 或 None"""
+        self.running = True
+        while self.running:
+            self.clock.tick(60)
+            self.update()
+            self.render()
+
+        return self.result
+
+    def render(self):
+        self.window.fill(cfg.WINDOW_COLOR)
+
+        # 标题
+        title = self.font.render("输入主机IP地址", True, (255, 255, 255))
+        title_rect = title.get_rect(center=(self.window_size[0] // 2, 80))
+        self.window.blit(title, title_rect)
+
+        # IP输入框背景
+        input_rect = pygame.Rect(
+            self.window_size[0] // 2 - 150, 180, 300, 50
+        )
+        pygame.draw.rect(self.window, (50, 50, 50), input_rect, border_radius=5)
+        pygame.draw.rect(self.window, (255, 255, 255), input_rect, 2, border_radius=5)
+
+        # IP文本
+        ip_surface = self.font.render(self.ip_text, True, (255, 255, 0))
+        ip_rect = ip_surface.get_rect(center=input_rect.center)
+        self.window.blit(ip_surface, ip_rect)
+
+        # 光标
+        if not self.connecting and pygame.time.get_ticks() % 1000 < 500:
+            cursor_x = ip_rect.right + 2
+            cursor_y = ip_rect.top + 5
+            pygame.draw.line(self.window, (255, 255, 0),
+                             (cursor_x, cursor_y),
+                             (cursor_x, cursor_y + ip_rect.height - 10), 2)
+
+        # 提示文字
+        hint = self.small_font.render("按ENTER连接 | ESC返回", True, (180, 180, 180))
+        hint_rect = hint.get_rect(center=(self.window_size[0] // 2, 260))
+        self.window.blit(hint, hint_rect)
+
+        # 状态文字（正在连接/错误信息）
+        if self.status_text:
+            status = self.small_font.render(self.status_text, True, self.status_color)
+            status_rect = status.get_rect(center=(self.window_size[0] // 2, 310))
+            self.window.blit(status, status_rect)
+
+        pygame.display.update()
+
+    def update(self):
+        self.get_event()
+
+    def get_event(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.quit_game()
+
+            if self.connecting:
+                continue  # 连接中不处理输入
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    self._try_connect()
+                elif event.key == pygame.K_ESCAPE:
+                    self.running = False
+                elif event.key == pygame.K_BACKSPACE:
+                    self.ip_text = self.ip_text[:-1]
+                elif event.key == pygame.K_PERIOD or event.key == pygame.K_KP_PERIOD:
+                    self.ip_text += '.'
+                elif event.unicode.isdigit():
+                    if len(self.ip_text) < 15:
+                        self.ip_text += event.unicode
+
+    def _try_connect(self):
+        """验证IP格式并返回，实际连接由_start_as_client()完成"""
+        ip = self.ip_text.strip()
+        # if not ip:
+        #     self.status_text = "请输入IP地址"
+        #     self.status_color = (255, 100, 100)
+        #     return
+        #
+        # # 简单的IP格式校验（避免临时连接导致Host端状态混乱）
+        # parts = ip.split('.')
+        # if len(parts) != 4 or not all(p.isdigit() and 0 <= int(p) <= 255 for p in parts):
+        #     self.status_text = "IP格式无效，请重新输入"
+        #     self.status_color = (255, 100, 100)
+        #     return
+        #
+        # self.status_text = "IP格式正确，正在进入游戏..."
+        # self.status_color = (100, 255, 100)
+        self.result = ip
+        self.running = False
+
+    def quit_game(self):
+        self.running = False
+        print("退出游戏")
+        pygame.quit()
+        exit()
+
+
+class HostWaitingScreen:
+    """Host等待客户端连接的界面"""
+
+    def __init__(self, host_network: HostNetwork):
+        self.host_network = host_network
+        self.running = None
+        self.window = pygame.display.get_surface()
+        self.window_size = (cfg.WIDTH, cfg.HEIGHT)
+        self.clock = pygame.time.Clock()
+        self.font = pygame.font.Font(cfg.FONTPATH, 28)
+        self.small_font = pygame.font.Font(cfg.FONTPATH, 20)
+        self.result = None  # True=connected, False=timeout/quit
+
+        # 获取本机IP
+        self.local_ip = self._get_local_ip()
+        self.elapsed = 0.0
+
+    #临时socket用于获取本机IP
+    @staticmethod
+    def _get_local_ip():
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except:
+            pass
+
+    def run(self):
+        """运行等待界面，返回是否连接成功"""
+        self.running = True
+
+        # 在子线程中等待客户端连接，不阻塞主线程
+        wait_thread = threading.Thread(target=self.host_network.wait_for_client, daemon=True)
+        wait_thread.start()
+
+        while self.running:
+
+            self.update()
+            self.render()
+
+            # 检查是否连接成功
+            if self.host_network.is_connected:
+                return True
+
+        # 用户退出，通知HostNetwork停止等待
+        self.host_network.running = False
+        return self.result or False
+
+    def render(self):
+        self.window.fill(cfg.WINDOW_COLOR)
+
+        # 标题
+        title = self.font.render("等待玩家加入...", True, (255, 255, 255))
+        title_rect = title.get_rect(center=(self.window_size[0] // 2, 80))
+        self.window.blit(title, title_rect)
+
+        # 本机IP信息
+        ip_label = self.font.render(
+            f"本机IP: {self.local_ip}  端口: {cfg.NETWORK_PORT}",
+            True, (255, 255, 0)
+        )
+        ip_rect = ip_label.get_rect(center=(self.window_size[0] // 2, 180))
+        self.window.blit(ip_label, ip_rect)
+
+        pygame.display.update()
+
+    def update(self):
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
 
 
 class MainMenu:
@@ -425,7 +627,44 @@ class MainMenu:
                             game.start_game(str(selected_level))
 
                     elif self.multi_player_button.is_clicked(event.pos):
-                       pass
+                        # 点击多人游戏，进入联机菜单
+                        print("进入多人游戏")
+                        multi_menu = MultiplayerMenu()
+                        mode = multi_menu.run()
+
+                        if mode == 'host':
+                            self._start_host_game()
+                        elif mode == 'join':
+                            self._start_client_game()
+
+    def _start_host_game(self):
+        """启动Host端游戏"""
+        host_network = HostNetwork()
+        host_network.start_listening()
+
+        # 显示等待界面
+        connected = HostWaitingScreen(host_network).run()
+
+        if connected:
+            # 选择关卡
+            level_select = LevelSelectMenu()
+            selected_level = level_select.run()
+            if selected_level is not None:
+                game = MultiplayerGame(host_network=host_network)
+                game.start_game(str(selected_level), is_host=True)
+        else:
+            host_network.close()
+
+    def _start_client_game(self):
+        """启动Client端游戏"""
+        host_ip = IPInputDialog().run()
+
+        if host_ip is None:
+            return  # 用户取消
+
+        # 初始化client网络，等待从host接收关卡数据
+        game = MultiplayerGame(host_ip=host_ip)
+        game.start_game(is_host=False)
 
     def quit_game(self):
         self.running = False
