@@ -295,14 +295,15 @@ class CollisionEvent:
             for explosion in ready_remove:
                 explosion.kill()
     def tank_bullet_collision(self):
-        # 子弹和敌方坦克的碰撞
-
         collision_results = {
             'explosion': []
         }
+
+        # 子弹和敌方坦克的碰撞
         hits = groupcollide(self.my_bullets, self.enemy_tanks, True, True, collided=self.default_collided)
         for bullet, tanks in hits.items():
-
+            if bullet.owner_tank:
+                bullet.owner_tank.bullet_live=False
             for tank in tanks:
                 tank.hp -= 1
                 if tank.hp <= 0:
@@ -324,6 +325,10 @@ class CollisionEvent:
                 collision_results['explosion'].append(self.my_tank)
                 self.tank_dead(self.my_tank)
 
+                for bullet in hits:
+                        if bullet.owner_tank:
+                            bullet.owner_tank.bullet_live = False
+
         for tank in collision_results['explosion']:
             self.create_explosion(tank)
 
@@ -338,7 +343,10 @@ class CollisionEvent:
 
         hits = pygame.sprite.groupcollide(self.my_bullets, self.walls, True, False)
         for bullet, walls in hits.items():
+            if bullet.owner_tank:
+                bullet.owner_tank.bullet_live=False
             collision_results['explosion'].append(bullet)
+
             for wall in walls:
                 if wall.type == 'brick':
                     wall.hp -= 1
@@ -348,7 +356,11 @@ class CollisionEvent:
 
         hits = pygame.sprite.groupcollide(self.walls, self.enemy_bullets, False, True)
         for wall, bullets in hits.items():
-            collision_results['explosion'].append(wall)
+            for bullet in bullets:
+                if bullet.owner_tank:
+                    bullet.owner_tank.bullet_live=False
+                collision_results['explosion'].append(bullet)
+
             if wall.type == 'brick':
                 wall.hp -= 1
             if wall.hp <= 0:

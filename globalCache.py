@@ -2,7 +2,6 @@ import pygame
 import cfg
 '''坦克图片缓存管理器 - 用于预加载和共享图片资源'''
 
-
 class TankImageCache:
     _cache = {}
 

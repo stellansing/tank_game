@@ -14,12 +14,8 @@ class Tank(Sprite):
         self.owner_window = window
         self.game_window_size = game_window_size
 
-
-
         self.images = None
-
         self.image = None
-
 
         self.current_frame = 0
         self.animation_timer = 0
@@ -35,7 +31,8 @@ class Tank(Sprite):
         self.last_dead_time = 0
 
         self.speed = 2
-        self.shot_speed = 200
+        self.shot_speed = 300
+        self.bullet_live=False
 
         self.shot_time_computer = TimeComputer(self.shot_speed)
         self.tank_animation_time_computer = TimeComputer(self.animation_interval)
@@ -76,15 +73,16 @@ class Tank(Sprite):
         self.update_animation()
 
     def shot(self,bullet_id):
-        if self.shot_time_computer.set_interval():
+        if not self.bullet_live and self.shot_time_computer.set_interval():
             bullet = Bullet(self,bullet_id)
+            self.bullet_live=True
             return bullet
         return None
 
 class MyTank(Tank):
-    def __init__(self,position,window,game_window_size:tuple,tank_id):
+    def __init__(self,position,window,game_window_size:tuple,tank_id,player_key='player1'):
         super().__init__(position,window,game_window_size,tank_id)
-        self.player_key='player1'
+        self.player_key=player_key
         self.images = TankImageCache.get_player_tank_image(self.player_key,0)
         self.direction = 'U1'
         self.image = self.images[self.direction]

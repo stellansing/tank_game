@@ -94,3 +94,13 @@ INITIAL_TICK = 60
 TITLE = '坦克大战'
 '''关卡'''
 LEVELFILEDIR = os.path.join(os.getcwd(), 'modules/levels')
+
+'''网络配置'''
+# 默认端口号
+NETWORK_PORT = 5555
+# 状态同步间隔（帧数），值越小越流畅但带宽越高
+NETWORK_SYNC_INTERVAL = 2
+# 连接超时（秒）
+NETWORK_TIMEOUT = 10.0
+# 心跳间隔（秒）
+NETWORK_PING_INTERVAL = 1.0

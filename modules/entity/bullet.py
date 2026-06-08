@@ -17,13 +17,17 @@ class Bullet(Sprite):
         self.id = bullet_id
         self.live = True
         self.is_move = False
+
+        self.owner_tank=None
         if tank:
+            #根据坦克位置和朝向确定位置
             self.owner_tank = tank
             self.img = self.images[self.owner_tank.direction[0]]
             self.direction = self.owner_tank.direction[0]
             self.rect = self.img.get_rect()
             self.bullet_initial_position()
         else:
+            #直接给出位置
             self.img = self.images[direction]
             self.direction = direction
             self.rect = self.img.get_rect()
@@ -51,19 +55,27 @@ class Bullet(Sprite):
             if self.rect.top > 0:
                 self.rect = self.rect.move(0, -self.speed)
             else:
+                if self.owner_tank:
+                    self.owner_tank.bullet_live = False
                 self.kill()
         elif self.direction == 'D':
             if self.rect.bottom < game_window_size[1]:
                 self.rect = self.rect.move(0, self.speed)
             else:
+                if self.owner_tank:
+                    self.owner_tank.bullet_live = False
                 self.kill()
         elif self.direction == 'L':
             if self.rect.left > 0:
                 self.rect = self.rect.move(-self.speed, 0)
             else:
+                if self.owner_tank:
+                    self.owner_tank.bullet_live = False
                 self.kill()
         elif self.direction == 'R':
             if self.rect.right < game_window_size[0]:
                 self.rect = self.rect.move(self.speed, 0)
             else:
+                if self.owner_tank:
+                    self.owner_tank.bullet_live = False
                 self.kill()
