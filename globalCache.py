@@ -91,19 +91,44 @@ class OtherImageCache:
     @classmethod
     def initialize(cls, cfg):
         cls._cache.clear()
-        #爆炸图片切割
-        different_stage_images = []
 
+        # ========== 爆炸动态图片切割 ==========
+        different_stage_images = []
         image = pygame.image.load(cfg.OTHER_IMAGE_PATHS.get('boom_dynamic')).convert_alpha()
         image_width, image_height = image.get_size()
-
         frame_width = image_width // 6
         frame_height = image_height
         for i in range(6):
             different_stage_images.append(image.subsurface(i * frame_width, 0, frame_width, frame_height))
-
         cls._cache['boom_dynamic'] = different_stage_images
+
+        # ========== 子弹图片 ==========
+        cls._cache['bullets'] = {}
+        for direction, path in cfg.BULLET_IMAGE_PATHS.items():
+            cls._cache['bullets'][direction] = pygame.image.load(path).convert_alpha()
+
+        # ========== 场景图片 ==========
+        cls._cache['scenes'] = {}
+        for scene_key, path in cfg.SCENE_IMAGE_PATHS.items():
+            cls._cache['scenes'][scene_key] = pygame.image.load(path).convert_alpha()
+
+        # ========== 其他图片 ==========
+        cls._cache['others'] = {}
+        for other_key, path in cfg.OTHER_IMAGE_PATHS.items():
+            cls._cache['others'][other_key] = pygame.image.load(path).convert_alpha()
 
     @classmethod
     def get_boom_image(cls):
         return cls._cache.get('boom_dynamic')
+
+    @classmethod
+    def get_bullet_images(cls):
+        return cls._cache.get('bullets', {})
+
+    @classmethod
+    def get_scene_image(cls, scene_key):
+        return cls._cache.get('scenes', {}).get(scene_key)
+
+    @classmethod
+    def get_other_image(cls, image_key):
+        return cls._cache.get('others', {}).get(image_key)

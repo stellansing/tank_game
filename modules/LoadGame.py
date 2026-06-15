@@ -10,6 +10,7 @@ from modules.entity.scenes import *
 from modules.entity.bullet import *
 from modules.network import HostNetwork, ClientNetwork
 from modules.network.protocol import GameStateSnapshot, NetworkMessage, InputData
+from globalCache import OtherImageCache
 import cfg
 
 class NormalVariables:
@@ -440,7 +441,7 @@ class GameResultEvent:
             return True
         elif nv.game_lose:
             # 加载失败图片
-            game_over_image = pygame.image.load(cfg.OTHER_IMAGE_PATHS['gameover'])
+            game_over_image = OtherImageCache.get_other_image('gameover')
             logo_width = 300
             logo_height = int(game_over_image.get_height() * (logo_width / game_over_image.get_width()))
             game_over_image = pygame.transform.scale(game_over_image, (logo_width, logo_height))
@@ -615,7 +616,7 @@ class MainGame:
         """渲染所有元素"""
         self.window.fill((0, 0, 0))
         # 加载并显示背景图片
-        background_image = pygame.image.load(cfg.OTHER_IMAGE_PATHS['background'])
+        background_image = OtherImageCache.get_other_image('background')
         self.window.blit(background_image, (0, 0))
 
         self.tanks_event.render()
@@ -681,12 +682,6 @@ class MainGame:
 
 
 class MultiplayerGame:
-    """
-    多人联机游戏管理器
-    Host端: 运行权威游戏逻辑 + 网络同步
-    Client端: 纯渲染端，接收并渲染Host状态
-    """
-
     def __init__(self, host_network=None, host_ip=None):
         #主机则传入network对象并依据此判断标记
         self._host_network = host_network
@@ -731,7 +726,6 @@ class MultiplayerGame:
     # ==================== Host端 ====================
 
     def _start_as_host(self, level):
-        """Host端：运行权威游戏逻辑并同步到客户端"""
         # 初始化游戏
         MainGame.window = pygame.display.set_mode((cfg.WIDTH + cfg.PANEL_WIDTH, cfg.HEIGHT))
         pygame.font.init()
@@ -894,7 +888,6 @@ class MultiplayerGame:
         nv.enemy_tanks_positions = config.get('enemy_tank_pos', [(0, 0), (288, 0), (576, 0)])
 
     def _send_level_data_to_client(self):
-        """发送关卡数据给客户端"""
         level_config_for_client = {
             'cell_len': self.nv.cell_len,
             'window_size': self.nv.window_size,
@@ -906,7 +899,6 @@ class MultiplayerGame:
         time.sleep(0.1)
 
     def _create_host_tank(self, position):
-        """创建Host玩家的坦克"""
         tank_id = 0
         self._my_tank = MyTank(
             position, self._window, self.nv.window_size,
@@ -916,7 +908,6 @@ class MultiplayerGame:
         MainGame.my_tank = self._my_tank
 
     def _create_teammate_tank(self, position):
-        """创建队友（客户端控制）的坦克"""
         self._teammate_tank = MyTank(
             position, self._window, self.nv.window_size,
             1, player_key='player2'
@@ -925,7 +916,6 @@ class MultiplayerGame:
 
 
     def _get_host_events(self):
-        """Host端事件处理：本地键盘 + 网络输入"""
         nv = self.nv
         event_list = pygame.event.get()
         for event in event_list:
@@ -959,7 +949,6 @@ class MultiplayerGame:
             else:
                 self._continue_client_input()
     def _continue_client_input(self):
-        """未收到输入信息时，自动移动队友坦克并射击"""
         # 移动队友坦克
         if self.last_teammate_direction:
             self._teammate_move(self.last_teammate_direction)
@@ -973,7 +962,6 @@ class MultiplayerGame:
                 self._tanks_event.allocated_bullet_id += 1
                 MainGame.my_bullets.add(bullet)
     def _process_client_input(self, input_data):
-        """处理客户端输入，移动队友坦克并射击"""
 
         # 移动队友坦克
         if input_data.key_order:
@@ -996,7 +984,6 @@ class MultiplayerGame:
             self.last_is_teammate_shot = False
 
     def _teammate_move(self, direction):
-        """移动队友坦克（复用player_tank_move逻辑）"""
         if not self._teammate_tank or not self._teammate_tank.live:
             return
 
@@ -1013,7 +1000,6 @@ class MultiplayerGame:
             self._teammate_tank.rect = old_rect
 
     def _update_host(self):
-        """Host端游戏逻辑更新"""
         self._tanks_event.tanks_update()
         self._bullet_event.bullets_update()
         self._collision_event.collision_update()
@@ -1028,9 +1014,8 @@ class MultiplayerGame:
         self._panel_x = cfg.WIDTH + 10
 
     def _render_host(self):
-        """Host端渲染"""
         self._window.fill((0, 0, 0))
-        background_image = pygame.image.load(cfg.OTHER_IMAGE_PATHS['background'])
+        background_image = OtherImageCache.get_other_image('background')
         self._window.blit(background_image, (0, 0))
 
         self._tanks_event.render()
@@ -1067,17 +1052,16 @@ class MultiplayerGame:
             self._window.blit(hp_text, (self._panel_x, 80))
 
     def _sync_to_client(self):
-        """发送游戏状态快照到客户端"""
         snapshot = GameStateSnapshot()
 
         # 收集坦克数据
         if self._my_tank:
             snapshot.tanks.append(
-                NetworkMessage.tank_to_data(self._my_tank, 'player1', is_host=True)
+                NetworkMessage.tank_to_data(self._my_tank, 'player1')
             )
         if self._teammate_tank:
             snapshot.tanks.append(
-                NetworkMessage.tank_to_data(self._teammate_tank, 'player2', is_host=False)
+                NetworkMessage.tank_to_data(self._teammate_tank, 'player2')
             )
         for enemy in MainGame.enemy_tanks:
             snapshot.tanks.append(
@@ -1086,15 +1070,12 @@ class MultiplayerGame:
 
         # 收集子弹数据
         for bullet in MainGame.my_bullets:
-            owner_type = 'player1'
-            if bullet.owner_tank and bullet.owner_tank == self._teammate_tank:
-                owner_type = 'player2'
             snapshot.bullets.append(
-                NetworkMessage.bullet_to_data(bullet, owner_type)
+                NetworkMessage.bullet_to_data(bullet)
             )
         for bullet in MainGame.enemy_bullets:
             snapshot.bullets.append(
-                NetworkMessage.bullet_to_data(bullet, 'enemy')
+                NetworkMessage.bullet_to_data(bullet)
             )
 
         # 收集墙体数据
@@ -1115,7 +1096,6 @@ class MultiplayerGame:
     # ==================== Client端 ====================
 
     def _start_as_client(self):
-        """Client端：接收并渲染Host的游戏状态"""
         # 初始化窗口
         self._window = pygame.display.set_mode((cfg.WIDTH + cfg.PANEL_WIDTH, cfg.HEIGHT))
         pygame.font.init()
@@ -1177,7 +1157,6 @@ class MultiplayerGame:
         self._client_network.close()
 
     def _wait_for_level_data(self, timeout=30.0):
-        """等待接收关卡数据"""
         start = time.time()
         while time.time() - start < timeout:
             self._client_network.update()
@@ -1194,7 +1173,6 @@ class MultiplayerGame:
             time.sleep(0.01)
 
     def _wait_for_game_start(self, timeout=30.0):
-        """等待游戏开始信号"""
         start = time.time()
         while time.time() - start < timeout:
             self._client_network.update()
@@ -1210,7 +1188,6 @@ class MultiplayerGame:
             time.sleep(0.01)
 
     def _create_walls_from_data(self):
-        """根据Host发来的数据创建墙体精灵"""
         self._render_walls.empty()
         if not self._walls_data:
             return
@@ -1228,7 +1205,6 @@ class MultiplayerGame:
                 wall_id += 1
 
     def _get_client_events(self):
-        """Client端事件处理：仅收集键盘输入并发送"""
         event_list = pygame.event.get()
         for event in event_list:
             if event.type == pygame.QUIT:
@@ -1251,7 +1227,6 @@ class MultiplayerGame:
         self._client_network.send_input(key_order, space_pressed)
 
     def _process_received_state(self):
-        """处理Host发来的状态快照，更新渲染用的精灵"""
         snapshot = self._client_network.latest_snapshot
         if snapshot is None:
             return
@@ -1329,9 +1304,8 @@ class MultiplayerGame:
         self._snapshot_game_info = game_info
 
     def _render_client(self):
-        """Client端渲染"""
         self._window.fill((0, 0, 0))
-        background_image = pygame.image.load(cfg.OTHER_IMAGE_PATHS['background'])
+        background_image = OtherImageCache.get_other_image('background')
         self._window.blit(background_image, (0, 0))
 
         # 渲染墙体
@@ -1377,7 +1351,7 @@ class MultiplayerGame:
                 cfg.HEIGHT / 2 - win_text.get_height() / 2
             ))
         elif game_info.get('game_lose'):
-            game_over_image = pygame.image.load(cfg.OTHER_IMAGE_PATHS['gameover'])
+            game_over_image = OtherImageCache.get_other_image('gameover')
             logo_width = 300
             logo_height = int(game_over_image.get_height() * (logo_width / game_over_image.get_width()))
             game_over_image = pygame.transform.scale(game_over_image, (logo_width, logo_height))
@@ -1387,7 +1361,6 @@ class MultiplayerGame:
             ))
 
     def get_text_surface(self, text, size=25):
-        """获取文字表面（供Host端info panel使用）"""
         my_font = pygame.font.Font(cfg.FONTPATH, size)
         text_surface = my_font.render(text, True, pygame.Color(255, 0, 0))
         return text_surface

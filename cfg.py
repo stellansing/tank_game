@@ -3,7 +3,7 @@ import os
 
 
 '''字体'''
-FONTPATH = os.path.join(os.getcwd(), 'resources/font/simsun.ttf')
+FONTPATH = os.path.join(os.getcwd(), 'resources/font/Mojangles.ttf')
 '''图片'''
 BULLET_IMAGE_PATHS = {
 					  'U': os.path.join(os.getcwd(), 'resources/images/bullet/bullet_up.png'),

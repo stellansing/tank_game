@@ -1,5 +1,6 @@
 import pygame
 from pygame.sprite import Sprite
+from globalCache import OtherImageCache
 
 import cfg
 
@@ -7,12 +8,7 @@ import cfg
 class Bullet(Sprite):
     def __init__(self, tank, bullet_id, position=None, direction=None):
         super().__init__()
-        self.images = {
-            'U': pygame.image.load(cfg.BULLET_IMAGE_PATHS['U']),
-            'D': pygame.image.load(cfg.BULLET_IMAGE_PATHS['D']),
-            'L': pygame.image.load(cfg.BULLET_IMAGE_PATHS['L']),
-            'R': pygame.image.load(cfg.BULLET_IMAGE_PATHS['R'])
-        }
+        self.images = OtherImageCache.get_bullet_images()
         self.speed = 8
         self.id = bullet_id
         self.live = True

@@ -1,6 +1,7 @@
 import pygame
 from pygame.sprite import Sprite
 import cfg
+from globalCache import OtherImageCache
 
 class StaticEntity(Sprite):
     def __init__(self, position: tuple, entity_id):
@@ -20,7 +21,7 @@ class SteelWall(StaticEntity):
     def __init__(self,position: tuple,entity_id):
         super().__init__(position,entity_id)
         self.type = 'steel'
-        self.image = pygame.image.load(cfg.SCENE_IMAGE_PATHS['iron'])
+        self.image = OtherImageCache.get_scene_image('iron')
         self.rect = self.image.get_rect()
         self.rect.left, self.rect.top = position
 
@@ -29,7 +30,7 @@ class BrickWall(StaticEntity):
     def __init__(self,position: tuple,entity_id):
         super().__init__(position,entity_id)
         self.type = 'brick'
-        self.image = pygame.image.load(cfg.SCENE_IMAGE_PATHS['brick'])
+        self.image = OtherImageCache.get_scene_image('brick')
         self.rect = self.image.get_rect()
         self.rect.left, self.rect.top = position
 
