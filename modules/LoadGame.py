@@ -38,6 +38,8 @@ class NormalVariables:
 
         self.is_multiplayer = False
 
+        self.home = None
+
 
 class TanksEvent:
     def __init__(self, my_tank,enemy_tanks,my_bullets ,enemy_bullets, walls, all_collision, ices, normal_variables):
@@ -316,7 +318,7 @@ class ScenesEvent:
         self.trees.add(tree)
 
 class CollisionEvent:
-    def __init__(self, my_tank,enemy_tanks,my_bullets ,enemy_bullets, walls, rivers, explosions, normal_variables, teammate_tank=None):
+    def __init__(self, my_tank,enemy_tanks,my_bullets ,enemy_bullets, walls, rivers, explosions, normal_variables, teammate_tank=None, home=None):
         self.normal_variables = normal_variables
         self.my_tank = my_tank
         self.teammate_tank = teammate_tank
@@ -328,6 +330,7 @@ class CollisionEvent:
         self.walls = walls
         self.rivers = rivers
         self.explosions = explosions
+        self.home = home
 
 
         self.default_collided = pygame.sprite.collide_rect_ratio(0.8)
@@ -336,6 +339,7 @@ class CollisionEvent:
     def collision_update(self):
         self.tank_bullet_collision()
         self.bullet_wall_collision()
+        self.bullet_home_collision()
         self.tank_move_collision()
 
     def render(self):
@@ -444,6 +448,23 @@ class CollisionEvent:
 
         for bullet in collision_results['explosion']:
             self.create_bullet_explosion(bullet)
+    def bullet_home_collision(self):
+        """检测敌人子弹与 home 的碰撞。"""
+        if self.home and self.home.live:
+            hits = spritecollide(self.home, self.enemy_bullets, True)
+            if hits:
+                self.home.destroy()
+                for bullet in hits:
+                    if bullet.owner_tank:
+                        bullet.owner_tank.bullet_live = False
+                self.create_explosion_on_home()
+
+    def create_explosion_on_home(self):
+        """在 home 位置创建爆炸效果。"""
+        explode = Explode(self.home, explode_id=self._explosion_id_counter)
+        self._explosion_id_counter += 1
+        self.explosions.add(explode)
+
     def tank_move_collision(self):
         pass
 
@@ -481,6 +502,10 @@ class GameResultEvent:
         self.game_result_check()
 
     def game_lose_check(self):
+        # home 被击毁直接判负
+        if self.normal_variables.home and self.normal_variables.home.destroyed:
+            self.normal_variables.game_lose = True
+            return
         # 双人模式：所有玩家都死亡才算输
         if self.my_tank and self.my_tank.hp <= 0:
             if self.teammate_tank is None or self.teammate_tank.hp <= 0:
@@ -565,7 +590,7 @@ class MainGame:
         self.tanks_event.tank_creation()
 
         self.game_result_event=GameResultEvent(nv,self.my_tank,self.enemy_tanks)
-        self.collision_event=CollisionEvent(self.my_tank,self.enemy_tanks,self.my_bullets ,self.enemy_bullets, self.walls, self.rivers, self.explosions, nv)
+        self.collision_event=CollisionEvent(self.my_tank,self.enemy_tanks,self.my_bullets ,self.enemy_bullets, self.walls, self.rivers, self.explosions, nv, home=nv.home)
 
         self.bullet_event=BulletsEvent(self.my_bullets,self.enemy_bullets,self.normal_variables)
         self.panel_x = cfg.WIDTH + 10
@@ -645,6 +670,12 @@ class MainGame:
                     self.scenes_event.scenes_creation(elem,(row_i * self.normal_variables.cell_len, num_row * self.normal_variables.cell_len))
                 num_row += 1
 
+        # 创建 home
+        home_pos = config.get('home_pos')
+        if home_pos:
+            pixel_pos = (home_pos[0] * nv.cell_len, home_pos[1] * nv.cell_len)
+            nv.home = Home(pixel_pos)
+
         # 保存关卡配置
         self.level_config = config
         print(f"成功加载关卡 {level}")
@@ -674,6 +705,8 @@ class MainGame:
 
     def render(self):
         """渲染所有元素"""
+        nv=self.normal_variables
+
         self.window.fill((0, 0, 0))
         # 加载并显示背景图片
         background_image = OtherImageCache.get_other_image('background')
@@ -690,6 +723,10 @@ class MainGame:
         self.tanks_event.render()
         self.bullet_event.render()
         self.collision_event.render()
+
+        # 渲染 home
+        if nv.home:
+            nv.home.display_static_entity(nv.window)
 
         # Render trees on top of everything for concealment effect
         self.scenes_event.render_trees()
@@ -851,7 +888,8 @@ class MultiplayerGame:
             self._my_tank, MainGame.enemy_tanks,
             MainGame.my_bullets, MainGame.enemy_bullets,
             MainGame.walls, MainGame.rivers, MainGame.explosions, self.nv,
-            teammate_tank=self._teammate_tank
+            teammate_tank=self._teammate_tank,
+            home=self.nv.home
         )
         self._bullet_event = BulletsEvent(
             MainGame.my_bullets, MainGame.enemy_bullets, self.nv
@@ -959,6 +997,12 @@ class MultiplayerGame:
         else:
             nv.teammate_reborn_position = nv.initial_reborn_position
         nv.enemy_tanks_positions = config.get('enemy_tank_pos', [(0, 0), (288, 0), (576, 0)])
+
+        # 创建 home
+        home_pos = config.get('home_pos')
+        if home_pos:
+            pixel_pos = (home_pos[0] * nv.cell_len, home_pos[1] * nv.cell_len)
+            nv.home = Home(pixel_pos)
 
     def _send_level_data_to_client(self):
         level_config_for_client = {
@@ -1109,6 +1153,10 @@ class MultiplayerGame:
             self._teammate_tank.display_tank()
 
         self._collision_event.render()
+
+        # 渲染 home
+        if self.nv.home:
+            self.nv.home.display_static_entity(self._window)
 
         # 检查游戏是否结束，通知客户端（只发送一次）
         #_game_over_sent仅仅使用一次

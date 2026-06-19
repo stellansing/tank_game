@@ -117,6 +117,12 @@ class OtherImageCache:
         for other_key, path in cfg.OTHER_IMAGE_PATHS.items():
             cls._cache['others'][other_key] = pygame.image.load(path).convert_alpha()
 
+        # ========== Home图片 ==========
+        cls._cache['home'] = {
+            'alive': pygame.image.load(cfg.HOME_IMAGE_PATHS[0]).convert_alpha(),
+            'destroyed': pygame.image.load(cfg.HOME_IMAGE_PATHS[1]).convert_alpha(),
+        }
+
     @classmethod
     def get_boom_image(cls):
         return cls._cache.get('boom_dynamic')
@@ -132,3 +138,8 @@ class OtherImageCache:
     @classmethod
     def get_other_image(cls, image_key):
         return cls._cache.get('others', {}).get(image_key)
+
+    @classmethod
+    def get_home_image(cls, state='alive'):
+        """获取 home 图片，state 为 'alive' 或 'destroyed'。"""
+        return cls._cache.get('home', {}).get(state)

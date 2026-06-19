@@ -1,4 +1,4 @@
-﻿import pygame
+import pygame
 from pygame.sprite import Sprite
 import random
 import cfg
@@ -77,3 +77,22 @@ class Ice(StaticEntity):
         self.rect.left, self.rect.top = position
         self.hp = 1
         self.live = True
+
+
+class Home(StaticEntity):
+    """Home (基地) 元素，被敌人子弹击中后销毁并导致游戏失败。"""
+    def __init__(self, position: tuple):
+        super().__init__(position, entity_id=-1)
+        self.type = "home"
+        self.image = OtherImageCache.get_home_image('alive')
+        self.rect = self.image.get_rect()
+        self.rect.left, self.rect.top = position
+        self.hp = 1
+        self.live = True
+        self.destroyed = False
+
+    def destroy(self):
+        """基地被击毁：切换图片并标记为已销毁。"""
+        self.destroyed = True
+        self.live = False
+        self.image = OtherImageCache.get_home_image('destroyed')
