@@ -31,6 +31,10 @@ class Tank(Sprite):
         self.last_dead_time = 0
 
         self.speed = 2
+        self.normal_speed = 2
+        self.ice_speed = 4
+        self.on_ice = False
+        self.ice_inertia_direction = None
         self.shot_speed = 300
         self.bullet_live=False
 

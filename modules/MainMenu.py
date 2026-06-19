@@ -85,9 +85,10 @@ class LevelSelectMenu:
             self.level_buttons.append((level, button))
         
         # 返回按钮
+        num_rows = (len(self.levels) + 2) // 3
         self.back_button = Button(
-            center_x_cell - button_width // 2,
-            start_y + len(self.levels) * (button_height + button_spacing) + 20,
+            self.window_size[0] // 2 - button_width // 2,
+            start_y + num_rows * (button_height + button_spacing) + 20,
             button_width,
             button_height,
             "返回",

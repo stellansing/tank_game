@@ -40,7 +40,7 @@ class NormalVariables:
 
 
 class TanksEvent:
-    def __init__(self, my_tank,enemy_tanks,my_bullets ,enemy_bullets, walls, all_collision,normal_variables):
+    def __init__(self, my_tank,enemy_tanks,my_bullets ,enemy_bullets, walls, all_collision, ices, normal_variables):
         self.normal_variables = normal_variables
         self.all_collision = all_collision
 
@@ -48,6 +48,7 @@ class TanksEvent:
 
         self.enemy_tanks = enemy_tanks
         self.my_bullets = my_bullets
+        self.ices = ices
         self.enemy_bullets = enemy_bullets
 
         self.walls = walls
@@ -133,15 +134,20 @@ class TanksEvent:
 
     def all_players_move(self):
         nv = self.normal_variables
-        if nv.key_order and self.my_tank and self.my_tank.live:
-            last_direction = nv.key_order[-1]
-            self.player_tank_move(self.my_tank, last_direction)
+        if self.my_tank and self.my_tank.live:
+            if nv.key_order:
+                last_direction = nv.key_order[-1]
+                self.my_tank.ice_inertia_direction = last_direction
+                self.player_tank_move(self.my_tank, last_direction)
+            elif self.my_tank.on_ice and self.my_tank.ice_inertia_direction:
+                self.player_tank_move(self.my_tank, self.my_tank.ice_inertia_direction)
 
 
     def player_tank_move(self, tank, direction):
         old_rect = tank.rect.copy()
         old_direction = tank.direction
 
+        self._apply_ice_effect(tank)
         tank.move(direction)
 
         if old_direction[0] != direction:
@@ -151,6 +157,18 @@ class TanksEvent:
         if pygame.sprite.spritecollideany(tank, other_tanks):
             tank.rect = old_rect
 
+    def _apply_ice_effect(self, tank):
+        """Check if tank is on ice and apply speed boost + set inertia direction."""
+        tank.on_ice = False
+        for ice in self.ices:
+            if tank.rect.colliderect(ice.rect):
+                tank.on_ice = True
+                tank.speed = tank.ice_speed
+                break
+        if not tank.on_ice:
+            tank.speed = tank.normal_speed
+            tank.ice_inertia_direction = None
+
     def all_enemy_tanks_move(self):
         for enemy in self.enemy_tanks:
             self.enemy_tank_move(enemy)
@@ -159,6 +177,7 @@ class TanksEvent:
         old_rect = tank.rect.copy()
         old_direction = tank.direction
 
+        self._apply_ice_effect(tank)
         tank.rand_move()
 
         if old_direction[0] != tank.direction:
@@ -218,19 +237,35 @@ class BulletsEvent:
             bullet.move(self.normal_variables.window_size)
 
 class ScenesEvent:
-    def __init__(self, all_collision,walls,normal_variables):
+    def __init__(self, all_collision, walls, rivers, trees, ices, normal_variables):
         self.normal_variables = normal_variables
 
         self.all_collision = all_collision
         self.walls = walls
+        self.rivers = rivers
+        self.trees = trees
+        self.ices = ices
 
-        self.allocated_scenes_id=0
+        self.allocated_scenes_id = 0
+        self._river_variant_counter = 0
     def scenes_update(self):
         pass
     def render(self):
         nv = self.normal_variables
         for wall in self.walls:
             wall.display_static_entity(nv.window)
+        for river in self.rivers:
+            river.display_static_entity(nv.window)
+
+    def render_ices(self):
+        nv = self.normal_variables
+        for ice in self.ices:
+            ice.display_static_entity(nv.window)
+
+    def render_trees(self):
+        nv = self.normal_variables
+        for tree in self.trees:
+            tree.display_static_entity(nv.window)
     def scenes_creation(self, scenes_type, position):
         if scenes_type == 'B':
             self.create_brick_wall(position, self.allocated_scenes_id)
@@ -260,16 +295,28 @@ class ScenesEvent:
         self.all_collision.add(wall)
 
     def create_river_wall(self, position):
-        pass
+        left, top = position[0], position[1]
+        variant = self._river_variant_counter % 2
+        self._river_variant_counter += 1
+        river = River((left, top), self.allocated_scenes_id, river_variant=variant)
+        self.allocated_scenes_id += 1
+        self.rivers.add(river)
+        self.all_collision.add(river)
 
     def create_ice_wall(self, position):
-        pass
+        left, top = position[0], position[1]
+        ice = Ice((left, top), self.allocated_scenes_id)
+        self.allocated_scenes_id += 1
+        self.ices.add(ice)
 
     def create_tree_wall(self, position):
-        pass
+        left, top = position[0], position[1]
+        tree = Tree((left, top), self.allocated_scenes_id)
+        self.allocated_scenes_id += 1
+        self.trees.add(tree)
 
 class CollisionEvent:
-    def __init__(self, my_tank,enemy_tanks,my_bullets ,enemy_bullets, walls, explosions, normal_variables, teammate_tank=None):
+    def __init__(self, my_tank,enemy_tanks,my_bullets ,enemy_bullets, walls, rivers, explosions, normal_variables, teammate_tank=None):
         self.normal_variables = normal_variables
         self.my_tank = my_tank
         self.teammate_tank = teammate_tank
@@ -279,6 +326,7 @@ class CollisionEvent:
         self.enemy_bullets = enemy_bullets
 
         self.walls = walls
+        self.rivers = rivers
         self.explosions = explosions
 
 
@@ -423,6 +471,15 @@ class GameResultEvent:
         self.game_lose_check()
         self.game_result_check()
 
+    def check_game_state(self):
+        """只检查游戏胜负状态，不渲染"""
+        self.game_win_check()
+        self.game_lose_check()
+
+    def render_game_result(self):
+        """渲染游戏结果（在所有图层之上）"""
+        self.game_result_check()
+
     def game_lose_check(self):
         # 双人模式：所有玩家都死亡才算输
         if self.my_tank and self.my_tank.hp <= 0:
@@ -462,6 +519,9 @@ class MainGame:
     walls = Group()
 
     explosions = Group()
+    rivers = Group()
+    trees = Group()
+    ices = Group()
 
     clock = None
 
@@ -495,17 +555,17 @@ class MainGame:
 
         nv = self.normal_variables
         nv.window = MainGame.window
-        self.scenes_event = ScenesEvent(self.all_collision, self.walls, nv)
+        self.scenes_event = ScenesEvent(self.all_collision, self.walls, self.rivers, self.trees, self.ices, nv)
         # 加载指定关卡
         self.load_lvl(str(level))
         # Music(cfg.AUDIO_PATHS['start']).play_music()
 
         
-        self.tanks_event=TanksEvent(self.my_tank,self.enemy_tanks,self.my_bullets ,self.enemy_bullets, self.walls, self.all_collision, nv)
+        self.tanks_event=TanksEvent(self.my_tank,self.enemy_tanks,self.my_bullets ,self.enemy_bullets, self.walls, self.all_collision, self.ices, nv)
         self.tanks_event.tank_creation()
 
         self.game_result_event=GameResultEvent(nv,self.my_tank,self.enemy_tanks)
-        self.collision_event=CollisionEvent(self.my_tank,self.enemy_tanks,self.my_bullets ,self.enemy_bullets, self.walls, self.explosions, nv)
+        self.collision_event=CollisionEvent(self.my_tank,self.enemy_tanks,self.my_bullets ,self.enemy_bullets, self.walls, self.rivers, self.explosions, nv)
 
         self.bullet_event=BulletsEvent(self.my_bullets,self.enemy_bullets,self.normal_variables)
         self.panel_x = cfg.WIDTH + 10
@@ -619,14 +679,23 @@ class MainGame:
         background_image = OtherImageCache.get_other_image('background')
         self.window.blit(background_image, (0, 0))
 
-        self.tanks_event.render()
+        # 先检查游戏状态（不渲染）
+        self.game_result_event.check_game_state()
 
-        self.bullet_event.render()
+        # 渲染场景（墙壁、河流）
         self.scenes_event.render()
+        # 冰场景渲染在坦克下面
+        self.scenes_event.render_ices()
 
-        self.game_result_event.game_result_update()
-
+        self.tanks_event.render()
+        self.bullet_event.render()
         self.collision_event.render()
+
+        # Render trees on top of everything for concealment effect
+        self.scenes_event.render_trees()
+
+        # 游戏结果渲染在所有图层之上
+        self.game_result_event.render_game_result()
 
         enemy_text = self.get_text_surface(f"敌人: {self.normal_variables.remaining_enemies}", 20)
         self.window.blit(enemy_text, (self.panel_x, 10))
@@ -744,7 +813,8 @@ class MultiplayerGame:
 
         # 创建SceneEvent并加载关卡
         self._scenes_event = ScenesEvent(
-            MainGame.all_collision, MainGame.walls, self.nv
+            MainGame.all_collision, MainGame.walls,
+            MainGame.rivers, MainGame.trees, MainGame.ices, self.nv
         )
         self._load_level_for_host(level)
 
@@ -762,7 +832,7 @@ class MultiplayerGame:
         self._tanks_event = TanksEvent(
             self._my_tank, MainGame.enemy_tanks,
             MainGame.my_bullets, MainGame.enemy_bullets,
-            MainGame.walls, MainGame.all_collision, self.nv
+            MainGame.walls, MainGame.all_collision, MainGame.ices, self.nv
         )
 
         # 创建队友坦克（客户端控制）
@@ -780,7 +850,7 @@ class MultiplayerGame:
         self._collision_event = CollisionEvent(
             self._my_tank, MainGame.enemy_tanks,
             MainGame.my_bullets, MainGame.enemy_bullets,
-            MainGame.walls, MainGame.explosions, self.nv,
+            MainGame.walls, MainGame.rivers, MainGame.explosions, self.nv,
             teammate_tank=self._teammate_tank
         )
         self._bullet_event = BulletsEvent(
@@ -830,6 +900,9 @@ class MultiplayerGame:
         MainGame.my_bullets.empty()
         MainGame.enemy_bullets.empty()
         MainGame.explosions.empty()
+        MainGame.rivers.empty()
+        MainGame.trees.empty()
+        MainGame.ices.empty()
 
         config = {}
         num_row = 0
@@ -990,6 +1063,8 @@ class MultiplayerGame:
         old_rect = self._teammate_tank.rect.copy()
         old_direction = self._teammate_tank.direction
 
+        self._tanks_event._apply_ice_effect(self._teammate_tank)
+
         self._teammate_tank.move(direction)
 
         if old_direction[0] != direction:
@@ -1018,15 +1093,21 @@ class MultiplayerGame:
         background_image = OtherImageCache.get_other_image('background')
         self._window.blit(background_image, (0, 0))
 
+        # 先检查游戏状态（不渲染）
+        self._game_result_event.check_game_state()
+
+        # 渲染场景（墙壁、河流）
+        self._scenes_event.render()
+        # 冰场景渲染在坦克下面
+        self._scenes_event.render_ices()
+
         self._tanks_event.render()
         self._bullet_event.render()
-        self._scenes_event.render()
 
         # 渲染队友坦克
         if self._teammate_tank and self._teammate_tank.live:
             self._teammate_tank.display_tank()
 
-        self._game_result_event.game_result_update()
         self._collision_event.render()
 
         # 检查游戏是否结束，通知客户端（只发送一次）
@@ -1038,6 +1119,9 @@ class MultiplayerGame:
             elif self.nv.game_lose:
                 self._host_network.send_game_over('lose')
                 self._game_over_sent = True
+
+        # 游戏结果渲染在所有图层之上
+        self._game_result_event.render_game_result()
 
         # 信息面板
         enemy_text = self.get_text_surface(f"敌人: {self.nv.remaining_enemies}", 20)
@@ -1342,7 +1426,7 @@ class MultiplayerGame:
         hp_text2 = font.render(f"P2血量: {p2_hp}", True, pygame.Color(0, 255, 0))
         self._window.blit(hp_text2, (self._panel_x, 80))
 
-        # 游戏结束提示
+        # 游戏结束提示（在所有图层之上）
         if game_info.get('game_win'):
             my_font = pygame.font.Font(cfg.FONTPATH, 50)
             win_text = my_font.render('You Win', True, pygame.Color(255, 0, 0))

@@ -1,5 +1,6 @@
-import pygame
+﻿import pygame
 from pygame.sprite import Sprite
+import random
 import cfg
 from globalCache import OtherImageCache
 
@@ -20,8 +21,8 @@ class StaticEntity(Sprite):
 class SteelWall(StaticEntity):
     def __init__(self,position: tuple,entity_id):
         super().__init__(position,entity_id)
-        self.type = 'steel'
-        self.image = OtherImageCache.get_scene_image('iron')
+        self.type = "steel"
+        self.image = OtherImageCache.get_scene_image("iron")
         self.rect = self.image.get_rect()
         self.rect.left, self.rect.top = position
 
@@ -29,9 +30,50 @@ class SteelWall(StaticEntity):
 class BrickWall(StaticEntity):
     def __init__(self,position: tuple,entity_id):
         super().__init__(position,entity_id)
-        self.type = 'brick'
-        self.image = OtherImageCache.get_scene_image('brick')
+        self.type = "brick"
+        self.image = OtherImageCache.get_scene_image("brick")
         self.rect = self.image.get_rect()
         self.rect.left, self.rect.top = position
 
         self.hp=1
+
+
+class Tree(StaticEntity):
+    """Grass/tree scene element - 2x2 grid of 4 tree tiles.
+    No collision, not destructible, renders on top of other entities for concealment."""
+    def __init__(self, position: tuple, entity_id):
+        super().__init__(position, entity_id)
+        self.type = "tree"
+        self.image = OtherImageCache.get_scene_image("tree")
+        self.rect = self.image.get_rect()
+        self.rect.left, self.rect.top = position
+        self.hp = 1
+        self.live = True
+
+
+class River(StaticEntity):
+    """River scene element - 2x2 grid using two different river tiles.
+    Tanks cannot pass through, but bullets can."""
+    def __init__(self, position: tuple, entity_id, river_variant=0):
+        super().__init__(position, entity_id)
+        self.type = "river"
+        if river_variant == 0:
+            self.image = OtherImageCache.get_scene_image("river1")
+        else:
+            self.image = OtherImageCache.get_scene_image("river2")
+        self.rect = self.image.get_rect()
+        self.rect.left, self.rect.top = position
+        self.hp = 1
+        self.live = True
+
+
+class Ice(StaticEntity):
+    """Ice scene element - tanks on ice move faster and have inertia (sliding)."""
+    def __init__(self, position: tuple, entity_id):
+        super().__init__(position, entity_id)
+        self.type = "ice"
+        self.image = OtherImageCache.get_scene_image("ice")
+        self.rect = self.image.get_rect()
+        self.rect.left, self.rect.top = position
+        self.hp = 1
+        self.live = True
