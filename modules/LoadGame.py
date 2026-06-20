@@ -4,6 +4,7 @@ import os
 import time
 
 from modules.tool.music import *
+from modules.tool.sound_manager import SoundManager
 from modules.entity.tank import *
 from modules.tool.explode import *
 from modules.entity.scenes import *
@@ -39,6 +40,9 @@ class NormalVariables:
         self.is_multiplayer = False
 
         self.home = None
+
+        self.current_level = 1
+        self.level_transition = False
 
 
 class TanksEvent:
@@ -563,8 +567,8 @@ class MainGame:
         self.tanks_event = None
         self.bullet_event = None
 
-        self.fire_music = Sound(cfg.AUDIO_PATHS['fire'])
-        self.hit_music = Sound(cfg.AUDIO_PATHS['hit'])
+        # self.fire_music = Sound(cfg.AUDIO_PATHS['fire'])
+        # self.hit_music = Sound(cfg.AUDIO_PATHS['hit'])
         self.is_multiplayer = False
 
     def start_game(self, level='1'):
@@ -594,6 +598,7 @@ class MainGame:
 
         self.bullet_event=BulletsEvent(self.my_bullets,self.enemy_bullets,self.normal_variables)
         self.panel_x = cfg.WIDTH + 10
+        SoundManager.play_start()
 
 
 
@@ -677,6 +682,7 @@ class MainGame:
             nv.home = Home(pixel_pos)
 
         # 保存关卡配置
+        nv.current_level = int(str(level))
         self.level_config = config
         print(f"成功加载关卡 {level}")
 
@@ -721,8 +727,9 @@ class MainGame:
         self.scenes_event.render_ices()
 
         self.tanks_event.render()
-        self.bullet_event.render()
         self.collision_event.render()
+        self.bullet_event.render()
+
 
         # 渲染 home
         if nv.home:
@@ -895,6 +902,7 @@ class MultiplayerGame:
             MainGame.my_bullets, MainGame.enemy_bullets, self.nv
         )
         self._panel_x = cfg.WIDTH + 10
+        SoundManager.play_start()
 
         # 通知客户端游戏开始
         self._host_network.send_game_start()
@@ -987,6 +995,7 @@ class MultiplayerGame:
         self._level_config = config
         self._walls_data = walls_list
 
+        nv.current_level = int(str(level))
         nv.max_enemy_tanks = config.get('max_enemy_num', 6)
         nv.total_enemy_tanks = config.get('total_enemy_num', 12)
         nv.remaining_enemies = nv.total_enemy_tanks
@@ -1264,6 +1273,7 @@ class MultiplayerGame:
 
         self._panel_x = cfg.WIDTH + 10
         self._running = True
+        SoundManager.play_start()
 
         # Client主循环
         while self._running:

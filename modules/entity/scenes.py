@@ -39,8 +39,6 @@ class BrickWall(StaticEntity):
 
 
 class Tree(StaticEntity):
-    """Grass/tree scene element - 2x2 grid of 4 tree tiles.
-    No collision, not destructible, renders on top of other entities for concealment."""
     def __init__(self, position: tuple, entity_id):
         super().__init__(position, entity_id)
         self.type = "tree"
@@ -52,8 +50,6 @@ class Tree(StaticEntity):
 
 
 class River(StaticEntity):
-    """River scene element - 2x2 grid using two different river tiles.
-    Tanks cannot pass through, but bullets can."""
     def __init__(self, position: tuple, entity_id, river_variant=0):
         super().__init__(position, entity_id)
         self.type = "river"
@@ -68,7 +64,6 @@ class River(StaticEntity):
 
 
 class Ice(StaticEntity):
-    """Ice scene element - tanks on ice move faster and have inertia (sliding)."""
     def __init__(self, position: tuple, entity_id):
         super().__init__(position, entity_id)
         self.type = "ice"
@@ -80,7 +75,6 @@ class Ice(StaticEntity):
 
 
 class Home(StaticEntity):
-    """Home (基地) 元素，被敌人子弹击中后销毁并导致游戏失败。"""
     def __init__(self, position: tuple):
         super().__init__(position, entity_id=-1)
         self.type = "home"
@@ -92,7 +86,6 @@ class Home(StaticEntity):
         self.destroyed = False
 
     def destroy(self):
-        """基地被击毁：切换图片并标记为已销毁。"""
         self.destroyed = True
         self.live = False
         self.image = OtherImageCache.get_home_image('destroyed')

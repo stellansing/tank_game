@@ -71,11 +71,11 @@ OTHER_IMAGE_PATHS = {
 '''声音'''
 AUDIO_PATHS = {
 				'add': os.path.join(os.getcwd(), 'resources/audios/add.wav'),
-				'bang': os.path.join(os.getcwd(), 'resources/audios/bang.wav'),
-				'blast': os.path.join(os.getcwd(), 'resources/audios/blast.wav'),
+				'bang': os.path.join(os.getcwd(), 'resources/audios/bang1.wav'),
+				'blast': os.path.join(os.getcwd(), 'resources/audios/blast1.wav'),
 				'fire': os.path.join(os.getcwd(), 'resources/audios/fire.wav'),
 				'Gunfire': os.path.join(os.getcwd(), 'resources/audios/Gunfire.wav'),
-				'hit': os.path.join(os.getcwd(), 'resources/audios/hit.wav'),
+				'hit': os.path.join(os.getcwd(), 'resources/audios/hit1.wav'),
 				'start': os.path.join(os.getcwd(), 'resources/audios/start.wav')
 			}
 

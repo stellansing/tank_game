@@ -41,6 +41,9 @@ class Tank(Sprite):
         self.shot_time_computer = TimeComputer(self.shot_speed)
         self.tank_animation_time_computer = TimeComputer(self.animation_interval)
 
+        # 击杀计数器
+        self.kills = 0
+
 
     def display_tank(self):
 

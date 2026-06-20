@@ -23,11 +23,9 @@ def _suppress_libpng_warnings():
     t = threading.Thread(target=_filter, daemon=True)
     t.start()
 
-
 _suppress_libpng_warnings()
 
 from modules.MainMenu import MainMenu
-
 
 if __name__ == '__main__':
     MainMenu().run()

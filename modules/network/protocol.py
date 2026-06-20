@@ -67,6 +67,10 @@ class GameInfo:
     player2_hp: int = 3
     game_win: bool = False
     game_lose: bool = False
+    player1_kills: int = 0
+    player2_kills: int = 0
+    current_level: int = 1
+    level_transition: bool = False
 
 
 @dataclass
@@ -202,5 +206,9 @@ class NetworkMessage:
             player2_hp=teammate_tank.hp if teammate_tank else 0,
             game_win=normal_variables.game_win,
             game_lose=normal_variables.game_lose,
+            player1_kills=my_tank.kills if my_tank else 0,
+            player2_kills=teammate_tank.kills if teammate_tank else 0,
+            current_level=normal_variables.current_level,
+            level_transition=normal_variables.level_transition,
         )
         return asdict(info)

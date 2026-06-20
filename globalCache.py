@@ -141,5 +141,4 @@ class OtherImageCache:
 
     @classmethod
     def get_home_image(cls, state='alive'):
-        """获取 home 图片，state 为 'alive' 或 'destroyed'。"""
         return cls._cache.get('home', {}).get(state)

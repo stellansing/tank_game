@@ -1,6 +1,7 @@
 from pygame.sprite import Sprite
 from modules.tool.time import *
 from globalCache import *
+from modules.tool.sound_manager import SoundManager
 
 class Explode(Sprite):
     def __init__(self, tank,position= None, explode_id=None):
@@ -21,6 +22,7 @@ class Explode(Sprite):
         self.total_duration = 300  # 爆炸总时长（毫秒）
         self.frame_duration = self.total_duration // len(self.images)  # 每帧持续时间
         self.time_computer = TimeComputer(self.frame_duration)
+        SoundManager.play_blast()
     def display_explode(self,window):
         if self.step < len(self.images):
             if self.time_computer.set_interval():
@@ -49,6 +51,7 @@ class BulletExplode(Sprite):
         self.total_duration = 100  # 爆炸总时长（毫秒）
         self.frame_duration = self.total_duration // len(self.images)  # 每帧持续时间
         self.time_computer = TimeComputer(self.frame_duration)
+        SoundManager.play_hit()
     def display_explode(self,window):
         if self.step < len(self.images):
             if self.time_computer.set_interval():
