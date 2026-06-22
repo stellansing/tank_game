@@ -1,7 +1,5 @@
 import pygame
 from pygame.sprite import Sprite
-import random
-import cfg
 from globalCache import OtherImageCache
 
 class StaticEntity(Sprite):

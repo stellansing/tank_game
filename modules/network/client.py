@@ -28,7 +28,6 @@ class ClientNetwork:
         self._level_config: Optional[dict] = None
         self._walls_data: Optional[list] = None
         self._game_started = False
-        self._game_result: Optional[str] = None
 
         # 关卡切换
         self._pending_level_reset = False
@@ -61,10 +60,6 @@ class ClientNetwork:
         return self._game_started
 
     @property
-    def game_result(self):
-        return self._game_result
-
-    @property
     def pending_level_reset(self):
         """检查是否需要因关卡切换重置渲染数据（一次性消费）"""
         if self._pending_level_reset:
@@ -72,12 +67,7 @@ class ClientNetwork:
             return True
         return False
 
-    def clear_snapshot(self):
-        """清除缓存的快照，用于关卡切换时避免使用旧状态"""
-        with self._snapshot_lock:
-            self._latest_snapshot = None
-
-    def connect(self, host, port= None) -> bool:
+    def connect(self, host, port=None) -> bool:
         port = port or cfg.NETWORK_PORT
         self._host_addr = (host, port)
 
@@ -181,9 +171,6 @@ class ClientNetwork:
         elif msg_type == MessageType.GAME_START:
             self._game_started = True
             print("游戏开始!")
-        elif msg_type == MessageType.GAME_OVER:
-            self._game_result = msg.get("result", "lose")
-            print(f"游戏结束: {self._game_result}")
         elif msg_type == MessageType.DISCONNECT:
             reason = msg.get("reason", "unknown")
             print(f"Host断开连接: {reason}")

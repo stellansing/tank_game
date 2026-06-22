@@ -1,7 +1,7 @@
 import pygame
-from pygame.sprite import Sprite,Group
-from modules.tool.time import *
-from modules.entity.bullet import *
+from pygame.sprite import Sprite
+from modules.tool.time import TimeComputer
+from modules.entity.bullet import Bullet
 from globalCache import TankImageCache
 import random
 
@@ -54,10 +54,7 @@ class Tank(Sprite):
         if self.tank_animation_time_computer.set_interval():
             self.current_frame = 1 - self.current_frame
 
-    def speed_change(self, change_direction,accelerate):
-        pass
-
-    def change_direction(self,direction):
+    def change_direction(self, direction):
         self.direction = str(direction)+self.direction[1]
 
     def move(self,direction):
@@ -87,7 +84,7 @@ class Tank(Sprite):
         return None
 
 class MyTank(Tank):
-    def __init__(self,position,window,game_window_size:tuple,tank_id,player_key='player1'):
+    def __init__(self, position, window, game_window_size: tuple, tank_id, player_key='player1'):
         super().__init__(position,window,game_window_size,tank_id)
         self.player_key=player_key
         self.images = TankImageCache.get_player_tank_image(self.player_key,0)

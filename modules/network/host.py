@@ -26,11 +26,10 @@ class HostNetwork:
         self._frame_counter = 0
 
         # 客户端输入缓存
-        self._latest_input= None
+        self._latest_input = None
         self._input_lock = threading.Lock()
 
         # 等待连接状态
-        self._accept_timeout = cfg.NETWORK_ACCEPT_TIMEOUT
         self._waiting_for_client = False
 
     @property
@@ -45,13 +44,8 @@ class HostNetwork:
     def latest_input(self):
         with self._input_lock:
             inp = self._latest_input
-            self._latest_input = None  # 消费后清空
+            self._latest_input = None
             return inp
-
-    @property
-    def has_input(self):
-        with self._input_lock:
-            return self._latest_input is not None
 
     def start_listening(self) -> bool:
         try:
@@ -65,32 +59,23 @@ class HostNetwork:
             return False
 
     def wait_for_client(self) -> bool:
-
         while self.running and not self._connected:
-
-            # 处理pygame事件以保持窗口响应
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
                     return False
-
             self._process_incoming()
             time.sleep(0.01)
-
         return self._connected
 
     def update(self):
-
         if not self.running:
             return
-
         self._process_incoming()
 
     def send_state(self, snapshot: GameStateSnapshot):
         if not self._connected:
             return
-
-        #限制同步帧数
         self._frame_counter += 1
         if self._frame_counter % self._sync_interval == 0:
             data = NetworkMessage.state_snapshot(snapshot)
@@ -139,10 +124,8 @@ class HostNetwork:
             msg_type = NetworkMessage.get_type(msg)
         except (json.JSONDecodeError, UnicodeDecodeError, KeyError):
             return
-
         if msg_type is None:
             return
-
         if msg_type == MessageType.CONNECT:
             self._handle_connect(addr, msg)
         elif msg_type == MessageType.INPUT:
@@ -150,20 +133,15 @@ class HostNetwork:
         elif msg_type == MessageType.DISCONNECT:
             self._handle_disconnect(msg)
 
-
-
     def _handle_connect(self, addr, msg):
         self._client_addr = addr
         self._connected = True
         self._waiting_for_client = False
-
-        # 发送确认
         self._socket.send(
             NetworkMessage.connect_ack("player2"),
             self._client_addr
         )
         print(f"[Host] 客户端已连接: {addr}")
-
 
     def _handle_input(self, msg):
         if self._connected:
@@ -171,7 +149,6 @@ class HostNetwork:
                 key_order=msg.get("key_order", []),
                 space_pressed=msg.get("space_pressed", False),
             )
-            #上锁时缓存输入
             with self._input_lock:
                 self._latest_input = input_data
 
@@ -180,4 +157,4 @@ class HostNetwork:
         print(f"[Host] 客户端断开连接: {reason}")
         self._connected = False
         self._client_addr = None
-        self._waiting_for_client = True  #重置等待状态，允许新客户端重连
+        self._waiting_for_client = True

@@ -1,6 +1,6 @@
 from pygame.sprite import Sprite
-from modules.tool.time import *
-from globalCache import *
+from modules.tool.time import TimeComputer
+from globalCache import OtherImageCache
 from modules.tool.sound_manager import SoundManager
 
 class Explode(Sprite):

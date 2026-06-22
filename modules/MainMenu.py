@@ -1,6 +1,6 @@
 import pygame
 import cfg
-from modules.LoadGame import *
+from modules.LoadGame import MainGame, MultiplayerGame
 from modules.network import HostNetwork, ClientNetwork
 from globalCache import OtherImageCache
 import os
@@ -311,8 +311,6 @@ class IPInputMenu:
         self.small_font = pygame.font.Font(cfg.FONTPATH, 20)
 
         self.ip_text = default_ip
-        self.status_color = (255, 255, 255)
-        self.connecting = False
         self.result = None
 
     def run(self):
@@ -345,7 +343,7 @@ class IPInputMenu:
         self.window.blit(ip_surface, ip_rect)
 
         # 光标
-        if not self.connecting and pygame.time.get_ticks() % 1000 < 500:
+        if pygame.time.get_ticks() % 1000 < 500:
             cursor_x = ip_rect.right + 2
             cursor_y = ip_rect.top + 5
             pygame.draw.line(self.window, (255, 255, 0),
@@ -366,9 +364,6 @@ class IPInputMenu:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.quit_game()
-
-            if self.connecting:
-                continue  # 连接中不处理输入
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
@@ -403,10 +398,8 @@ class HostWaitingScreen:
         self.running = None
         self.window = pygame.display.get_surface()
         self.window_size = (cfg.WIDTH, cfg.HEIGHT)
-        self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(cfg.FONTPATH, 28)
         self.small_font = pygame.font.Font(cfg.FONTPATH, 20)
-        self.result = None
 
         # 获取本机IP
         self.local_ip = self._get_local_ip()
@@ -441,7 +434,7 @@ class HostWaitingScreen:
 
         # 用户退出，通知HostNetwork停止等待
         self.host_network.running = False
-        return self.result or False
+        return False
 
     def render(self):
         self.window.fill(cfg.WINDOW_COLOR)

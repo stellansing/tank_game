@@ -1,9 +1,9 @@
 import pygame
+from pygame._sprite import Group
 from pygame.sprite import groupcollide, spritecollide
 import os
 import time
 
-from modules.tool.music import *
 from modules.tool.sound_manager import SoundManager
 from modules.entity.tank import *
 from modules.tool.explode import *
@@ -108,9 +108,6 @@ class TanksEvent:
             self.all_collision.add(enemy_tank)
             return True
         return False
-    def tank_dead(self, tank):
-        pass
-
     #射击-更新
     def tanks_shot(self):
         self.all_players_shot()
@@ -564,8 +561,6 @@ class MainGame:
         self.collision_event = None
         self.tanks_event = None
         self.bullet_event = None
-
-        self.is_multiplayer = False
 
         # 关卡切换相关
         self._transition_timer = 0
@@ -1546,8 +1541,6 @@ class MultiplayerGame:
                 if self._transition_timer == 0:
                     self._transition_timer = pygame.time.get_ticks()
 
-                print(self._client_home)
-
                 self._render_client()
                 if game_info.get('game_win'):
                     self._render_client_transition_kills(game_info)
@@ -1741,7 +1734,6 @@ class MultiplayerGame:
         # 更新 home 状态
 
         home_data = snapshot.home
-        print("home_data:", home_data)
         if home_data and self._client_home:
             self._client_home.live = home_data.get('live', True)
             self._client_home.destroyed = home_data.get('destroyed', False)

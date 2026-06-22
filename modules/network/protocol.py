@@ -101,7 +101,6 @@ class GameStateSnapshot:
 class NetworkMessage:
 
     ENCODING = 'utf-8'
-    MAX_PACKET_SIZE = 65536  # UDP最大缓冲区
 
     @staticmethod
     def encode(msg_type: MessageType, data: dict = None) -> bytes:
