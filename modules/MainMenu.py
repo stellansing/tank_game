@@ -54,7 +54,7 @@ class LevelSelectMenu:
 
         self.clock = pygame.time.Clock()
 
-        title_font = pygame.font.Font(cfg.FONTPATH, 36)
+        title_font = pygame.font.Font(cfg.FONT_PATH, 36)
         self.title_surface = title_font.render("选择关卡", True, (255, 255, 255))
         self.title_rect = self.title_surface.get_rect(center=(self.window_size[0] // 2, 50))
 
@@ -78,7 +78,7 @@ class LevelSelectMenu:
                 button_width,
                 button_height,
                 f"第 {level} 关",
-                cfg.FONTPATH,
+                cfg.FONT_PATH,
                 font_size=24,
                 color=(255, 255, 255),
                 hover_color=(255, 255, 0),
@@ -94,7 +94,7 @@ class LevelSelectMenu:
             button_width,
             button_height,
             "返回",
-            cfg.FONTPATH,
+            cfg.FONT_PATH,
             font_size=24,
             color=(255, 255, 255),
             hover_color=(255, 255, 0),
@@ -103,7 +103,7 @@ class LevelSelectMenu:
 
     def get_available_levels(self):
         levels = []
-        level_dir = cfg.LEVELFILEDIR
+        level_dir = cfg.LEVEL_FILE_DIR
         if os.path.exists(level_dir):
             for file in os.listdir(level_dir):
                 if file.endswith('.lvl'):
@@ -185,7 +185,7 @@ class MultiplayerMenu:
         self.clock = pygame.time.Clock()
 
         # 标题
-        title_font = pygame.font.Font(cfg.FONTPATH, 36)
+        title_font = pygame.font.Font(cfg.FONT_PATH, 36)
         self.title_surface = title_font.render("多人游戏", True, (255, 255, 255))
         self.title_rect = self.title_surface.get_rect(center=(self.window_size[0] // 2, 50))
 
@@ -202,7 +202,7 @@ class MultiplayerMenu:
             button_width,
             button_height,
             "创建房间",
-            cfg.FONTPATH,
+            cfg.FONT_PATH,
             font_size=24,
             color=(255, 255, 255),
             hover_color=(255, 255, 0),
@@ -215,7 +215,7 @@ class MultiplayerMenu:
             button_width,
             button_height,
             "加入房间",
-            cfg.FONTPATH,
+            cfg.FONT_PATH,
             font_size=24,
             color=(255, 255, 255),
             hover_color=(255, 255, 0),
@@ -228,7 +228,7 @@ class MultiplayerMenu:
             button_width,
             button_height,
             "返回",
-            cfg.FONTPATH,
+            cfg.FONT_PATH,
             font_size=24,
             color=(255, 255, 255),
             hover_color=(255, 255, 0),
@@ -308,8 +308,8 @@ class IPInputMenu:
         pygame.display.set_caption(cfg.TITLE + " - 连接房间")
 
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.Font(cfg.FONTPATH, 28)
-        self.small_font = pygame.font.Font(cfg.FONTPATH, 20)
+        self.font = pygame.font.Font(cfg.FONT_PATH, 28)
+        self.small_font = pygame.font.Font(cfg.FONT_PATH, 20)
 
         self.ip_text = default_ip
         self.result = None
@@ -399,8 +399,8 @@ class HostWaitingScreen:
         self.running = None
         self.window = pygame.display.get_surface()
         self.window_size = (cfg.WIDTH, cfg.HEIGHT)
-        self.font = pygame.font.Font(cfg.FONTPATH, 28)
-        self.small_font = pygame.font.Font(cfg.FONTPATH, 20)
+        self.font = pygame.font.Font(cfg.FONT_PATH, 28)
+        self.small_font = pygame.font.Font(cfg.FONT_PATH, 20)
 
         # 获取本机IP
         self.local_ip = self._get_local_ip()
@@ -464,14 +464,15 @@ class HostWaitingScreen:
 
 class MainMenu:
 
-    def __init__(self):
+    def __init__(self, username=None):
+        self.username = username
         self.running = None
         pygame.display.init()
         pygame.font.init()
 
         self.window_size = (cfg.WIDTH, cfg.HEIGHT)
         self.window = pygame.display.set_mode(self.window_size)
-        pygame.display.set_caption(cfg.TITLE)
+        pygame.display.set_caption(cfg.TITLE + f" - {username}" if username else cfg.TITLE)
 
         self.clock = pygame.time.Clock()
 
@@ -505,7 +506,7 @@ class MainMenu:
             button_width,
             button_height,
             "单人游戏",
-            cfg.FONTPATH,
+            cfg.FONT_PATH,
             font_size=28,
             color=(255, 255, 255),
             hover_color=(255, 255, 0),
@@ -518,7 +519,7 @@ class MainMenu:
             button_width,
             button_height,
             "多人游戏",
-            cfg.FONTPATH,
+            cfg.FONT_PATH,
             font_size=28,
             color=(255, 255, 255),
             hover_color=(255, 255, 0),
@@ -575,7 +576,7 @@ class MainMenu:
                         selected_level = LevelSelectMenu().run()
 
                         if selected_level is not None:
-                            game = MainGame()
+                            game = MainGame(username=self.username)
                             game.start_game(str(selected_level))
 
                     elif self.multi_player_button.is_clicked(event.pos):
@@ -600,7 +601,7 @@ class MainMenu:
             level_select = LevelSelectMenu()
             selected_level = level_select.run()
             if selected_level is not None:
-                game = MultiplayerGame(host_network=host_network)
+                game = MultiplayerGame(host_network=host_network, username=self.username)
                 game.start_game(str(selected_level), is_host=True)
         else:
             host_network.close()
@@ -612,7 +613,7 @@ class MainMenu:
             return  # 用户取消
 
         # 初始化client网络，等待从host接收关卡数据
-        game = MultiplayerGame(host_ip=host_ip)
+        game = MultiplayerGame(host_ip=host_ip, username=self.username)
         game.start_game(is_host=False)
 
     def quit_game(self):

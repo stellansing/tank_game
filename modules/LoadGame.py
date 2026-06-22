@@ -11,6 +11,7 @@ from modules.entity.scenes import *
 from modules.entity.bullet import *
 from modules.network import HostNetwork, ClientNetwork
 from modules.network.protocol import GameStateSnapshot, NetworkMessage, InputData
+from modules.user_manager import UserManager
 from globalCache import OtherImageCache
 import cfg
 
@@ -532,7 +533,7 @@ class GameResultEvent:
     def game_result_check(self):
         nv = self.normal_variables
         if nv.game_win:
-            my_font = pygame.font.Font(cfg.FONTPATH, 50)
+            my_font = pygame.font.Font(cfg.FONT_PATH, 50)
             win_text = my_font.render('You Win', True, pygame.Color(255, 0, 0))
             nv.window.blit(win_text, (nv.window_size[0] / 2 - win_text.get_width() / 2, nv.window_size[1] / 2 - win_text.get_height() / 2))
             return True
@@ -569,8 +570,9 @@ class MainGame:
 
     TRANSITION_DELAY = 3000
 
-    def __init__(self):
+    def __init__(self, username=None):
 
+        self.username = username
         self.normal_variables = NormalVariables()
 
         self.panel_x = None
@@ -645,16 +647,30 @@ class MainGame:
 
                 if pygame.time.get_ticks() - self._transition_timer > self.TRANSITION_DELAY:
                     if nv.game_win:
+                        # 记录本关胜利数据
+                        if self.username:
+                            UserManager.save_game_record(
+                                self.username, nv.current_level,
+                                is_win=True, kills=self._last_level_kills
+                            )
                         next_level = nv.current_level + 1
                         if self.level_exists(next_level):
                             self._reset_and_load_level(next_level)
                             self._transition_timer = 0
                             continue
-                    # 全部通关或失败，返回主菜单
-                    else:
-                        # 将窗口恢复为原始大小
+                        # 全部通关，返回主菜单
                         pygame.display.set_mode((cfg.WIDTH, cfg.HEIGHT))
                         return
+                    # 失败，记录并返回主菜单
+                    if self.username:
+                        lose_kills = self.my_tank.kills if self.my_tank else 0
+                        UserManager.save_game_record(
+                            self.username, nv.current_level,
+                            is_win=False, kills=lose_kills
+                        )
+                    # 将窗口恢复为原始大小
+                    pygame.display.set_mode((cfg.WIDTH, cfg.HEIGHT))
+                    return
                 # 过渡中
                 continue
 
@@ -668,12 +684,12 @@ class MainGame:
         """加载关卡文件"""
         nv = self.normal_variables
 
-        path = cfg.LEVELFILEDIR + '/' + str(level) + '.lvl'
+        path = cfg.LEVEL_FILE_DIR + '/' + str(level) + '.lvl'
 
         # 检查文件是否存在
         if not os.path.exists(path):
             print(f"关卡文件不存在: {path}，使用默认关卡1")
-            path = cfg.LEVELFILEDIR + '/1.lvl'
+            path = cfg.LEVEL_FILE_DIR + '/1.lvl'
 
         with open(path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
@@ -806,7 +822,7 @@ class MainGame:
 
     def get_text_surface(self, text, size=25):
 
-        my_font = pygame.font.Font(cfg.FONTPATH, size)
+        my_font = pygame.font.Font(cfg.FONT_PATH, size)
         text_surface = my_font.render(text, True, pygame.Color(255, 0, 0))
         return text_surface
 
@@ -846,7 +862,7 @@ class MainGame:
     @staticmethod
     def level_exists(level):
         """检查关卡文件是否存在"""
-        path = os.path.join(cfg.LEVELFILEDIR, f'{level}.lvl')
+        path = os.path.join(cfg.LEVEL_FILE_DIR, f'{level}.lvl')
         return os.path.exists(path)
 
     def _reset_and_load_level(self, level):
@@ -892,7 +908,7 @@ class MainGame:
     def _render_transition_kills(self):
         """在关卡切换时渲染击杀统计"""
         nv = self.normal_variables
-        my_font = pygame.font.Font(cfg.FONTPATH, 36)
+        my_font = pygame.font.Font(cfg.FONT_PATH, 36)
         kills = self._last_level_kills
         kills_text = my_font.render(f'击杀: {kills}', True, pygame.Color(255, 255, 0))
         text_x = nv.window_size[0] / 2 - kills_text.get_width() / 2
@@ -903,12 +919,14 @@ class MainGame:
 class MultiplayerGame:
     TRANSITION_DELAY = 3000  # 关卡切换显示时间（毫秒）
 
-    def __init__(self, host_network=None, host_ip=None):
+    def __init__(self, host_network=None, host_ip=None, username=None):
         # 主机则传入network对象并依据此判断标记
         self._host_network = host_network
         self._host_ip = host_ip
         self._client_network = None
         self._is_host = host_network is not None
+
+        self.username = username
 
         # 游戏变量
         self._window = None
@@ -1053,6 +1071,14 @@ class MultiplayerGame:
 
                 if pygame.time.get_ticks() - self._transition_timer > self.TRANSITION_DELAY:
                     if nv.game_win:
+                        # 记录本关胜利数据
+                        if self.username:
+                            p1_kills = self._my_tank.kills if self._my_tank else 0
+                            UserManager.save_game_record(
+                                self.username, nv.current_level,
+                                is_win=True, kills=p1_kills,
+                                is_multiplayer=True, teammate="队友"
+                            )
                         next_level = nv.current_level + 1
                         if MainGame.level_exists(next_level):
                             self._reset_host_level(next_level)
@@ -1061,6 +1087,14 @@ class MultiplayerGame:
                             continue
                     # 全部通关或失败，退出
                     else:
+                        # 记录失败数据
+                        if self.username:
+                            p1_kills = self._my_tank.kills if self._my_tank else 0
+                            UserManager.save_game_record(
+                                self.username, nv.current_level,
+                                is_win=False, kills=p1_kills,
+                                is_multiplayer=True, teammate="队友"
+                            )
                         # 将窗口恢复为原始大小
                         pygame.display.set_mode((cfg.WIDTH, cfg.HEIGHT))
                         self._running = False
@@ -1082,9 +1116,9 @@ class MultiplayerGame:
     def _load_level_for_host(self, level):
         """Host端加载关卡（复用MainGame的load_lvl逻辑）"""
         nv = self.nv
-        path = os.path.join(cfg.LEVELFILEDIR, f'{level}.lvl')
+        path = os.path.join(cfg.LEVEL_FILE_DIR, f'{level}.lvl')
         if not os.path.exists(path):
-            path = os.path.join(cfg.LEVELFILEDIR, '1.lvl')
+            path = os.path.join(cfg.LEVEL_FILE_DIR, '1.lvl')
 
         with open(path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
@@ -1341,7 +1375,7 @@ class MultiplayerGame:
         enemy_text = self.get_text_surface(f"敌人: {self.nv.remaining_enemies}", 20)
         self._window.blit(enemy_text, (self._panel_x, 10))
 
-        font = pygame.font.Font(cfg.FONTPATH, 20)
+        font = pygame.font.Font(cfg.FONT_PATH, 20)
         if self._my_tank:
             hp_text = font.render(f"P1血量: {self._my_tank.hp}", True, pygame.Color(255, 0, 0))
             self._window.blit(hp_text, (self._panel_x, 50))
@@ -1475,7 +1509,7 @@ class MultiplayerGame:
     def _render_multiplayer_transition_kills(self):
         """在联机关卡切换时渲染双方击杀统计"""
         nv = self.nv
-        my_font = pygame.font.Font(cfg.FONTPATH, 36)
+        my_font = pygame.font.Font(cfg.FONT_PATH, 36)
         p1_text = my_font.render(f'P1击杀: {self._last_p1_kills}', True, pygame.Color(255, 255, 0))
         p2_text = my_font.render(f'P2击杀: {self._last_p2_kills}', True, pygame.Color(0, 255, 0))
         text_x = nv.window_size[0] / 2 - p1_text.get_width() / 2
@@ -1572,6 +1606,15 @@ class MultiplayerGame:
 
                 elapsed = pygame.time.get_ticks() - self._transition_timer
                 if elapsed > self.TRANSITION_DELAY:
+                    # 记录客户端游戏数据
+                    if self.username and game_info:
+                        is_win = game_info.get('game_win', False)
+                        level = game_info.get('current_level', 1)
+                        kills = game_info.get('player2_kills', 0)
+                        UserManager.save_game_record(
+                            self.username, level, is_win=is_win, kills=kills,
+                            is_multiplayer=True, teammate="房主"
+                        )
                     # Host会发送新关卡数据，等待接收
                     self._transition_timer = 0
             else:
@@ -1810,7 +1853,7 @@ class MultiplayerGame:
 
         # 信息面板
         game_info = getattr(self, '_snapshot_game_info', {})
-        font = pygame.font.Font(cfg.FONTPATH, 20)
+        font = pygame.font.Font(cfg.FONT_PATH, 20)
 
         remaining = game_info.get('remaining_enemies', 0)
         enemy_text = font.render(f"敌人: {remaining}", True, pygame.Color(255, 0, 0))
@@ -1826,7 +1869,7 @@ class MultiplayerGame:
 
         # 游戏结束提示（在所有图层之上）
         if game_info.get('game_win'):
-            my_font = pygame.font.Font(cfg.FONTPATH, 50)
+            my_font = pygame.font.Font(cfg.FONT_PATH, 50)
             win_text = my_font.render('You Win', True, pygame.Color(255, 0, 0))
             self._window.blit(win_text, (
                 cfg.WIDTH / 2 - win_text.get_width() / 2,
@@ -1844,7 +1887,7 @@ class MultiplayerGame:
 
     def _render_client_transition_kills(self, game_info):
         """Client端渲染关卡切换时的击杀统计"""
-        my_font = pygame.font.Font(cfg.FONTPATH, 36)
+        my_font = pygame.font.Font(cfg.FONT_PATH, 36)
         p1_kills = game_info.get('player1_kills', 0)
         p2_kills = game_info.get('player2_kills', 0)
         p1_text = my_font.render(f'P1击杀: {p1_kills}', True, pygame.Color(255, 255, 0))
@@ -1857,6 +1900,6 @@ class MultiplayerGame:
         self._window.blit(p2_text, (p2_x, p2_y))
 
     def get_text_surface(self, text, size=25):
-        my_font = pygame.font.Font(cfg.FONTPATH, size)
+        my_font = pygame.font.Font(cfg.FONT_PATH, size)
         text_surface = my_font.render(text, True, pygame.Color(255, 0, 0))
         return text_surface

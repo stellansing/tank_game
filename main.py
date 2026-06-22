@@ -28,8 +28,12 @@ _suppress_libpng_warnings()
 
 
 # Import after libpng warning suppression (must be after stderr redirect)
+from modules.LoginMenu import LoginMenu  # noqa: E402
 from modules.MainMenu import MainMenu  # noqa: E402
 
 
 if __name__ == '__main__':
-    MainMenu().run()
+    login_menu = LoginMenu()
+    username = login_menu.run()
+    if username:
+        MainMenu(username).run()

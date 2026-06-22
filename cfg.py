@@ -2,7 +2,7 @@ import os
 
 
 '''字体'''
-FONTPATH = os.path.join(os.getcwd(), 'resources/font/Mojangles.ttf')
+FONT_PATH = os.path.join(os.getcwd(), 'resources/font/Mojangles.ttf')
 '''图片'''
 BULLET_IMAGE_PATHS = {
     'U': os.path.join(os.getcwd(), 'resources/images/bullet/bullet_up.png'),
@@ -94,7 +94,7 @@ INITIAL_TICK = 60
 
 TITLE = '坦克大战'
 '''关卡'''
-LEVELFILEDIR = os.path.join(os.getcwd(), 'modules/levels')
+LEVEL_FILE_DIR = os.path.join(os.getcwd(), 'modules/levels')
 
 '''网络配置'''
 # 默认端口号
