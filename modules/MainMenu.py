@@ -7,9 +7,11 @@ import os
 import socket
 import threading
 
+
 class Button:
-    def __init__(self, x, y, width, height, text, font_path, font_size=30, 
-                 color=(255, 255, 255), hover_color=(255, 255, 0), bg_color=(100, 100, 100)):
+    def __init__(self, x, y, width, height, text, font_path, font_size=30,
+                 color=(255, 255, 255), hover_color=(255, 255, 0),
+                 bg_color=(100, 100, 100)):
         self.rect = pygame.Rect(x, y, width, height)
         self.text = text
         self.font = pygame.font.Font(font_path, font_size)
@@ -17,39 +19,39 @@ class Button:
         self.hover_color = hover_color
         self.bg_color = bg_color
         self.is_hovered = False
-        
+
     def draw(self, surface):
         # 根据鼠标悬停状态选择颜色
         current_color = self.hover_color if self.is_hovered else self.color
-        
+
         # 绘制按钮背景
         pygame.draw.rect(surface, self.bg_color, self.rect, border_radius=5)
         pygame.draw.rect(surface, current_color, self.rect, 3, border_radius=5)
-        
+
         # 绘制按钮文字
         text_surface = self.font.render(self.text, True, current_color)
         text_rect = text_surface.get_rect(center=self.rect.center)
         surface.blit(text_surface, text_rect)
-        
+
     def check_hover(self, mouse_pos):
         self.is_hovered = self.rect.collidepoint(mouse_pos)
         return self.is_hovered
-        
+
     def is_clicked(self, mouse_pos):
         return self.rect.collidepoint(mouse_pos)
 
 
 class LevelSelectMenu:
-    
+
     def __init__(self):
         self.running = None
         pygame.display.init()
         pygame.font.init()
-        
+
         self.window_size = (cfg.WIDTH, cfg.HEIGHT)
         self.window = pygame.display.set_mode(self.window_size)
         pygame.display.set_caption(cfg.TITLE + " - 选择关卡")
-        
+
         self.clock = pygame.time.Clock()
 
         title_font = pygame.font.Font(cfg.FONTPATH, 36)
@@ -59,20 +61,20 @@ class LevelSelectMenu:
         # 获取可用关卡列表
         self.levels = self.get_available_levels()
         self.selected_level = None
-        
+
         # 创建关卡按钮
         self.level_buttons = []
         button_width = 150
         button_height = 60
         center_x_cell = self.window_size[0] // 6
-        center_x=[center_x_cell,center_x_cell*3,center_x_cell*5]
+        center_x = [center_x_cell, center_x_cell * 3, center_x_cell * 5]
         button_spacing = 20
-        
+
         start_y = 80
         for i, level in enumerate(self.levels):
             button = Button(
-                center_x[i%3] - button_width // 2,
-                start_y + (i//3) * (button_height + button_spacing),
+                center_x[i % 3] - button_width // 2,
+                start_y + (i // 3) * (button_height + button_spacing),
                 button_width,
                 button_height,
                 f"第 {level} 关",
@@ -83,7 +85,7 @@ class LevelSelectMenu:
                 bg_color=(50, 50, 50)
             )
             self.level_buttons.append((level, button))
-        
+
         # 返回按钮
         num_rows = (len(self.levels) + 2) // 3
         self.back_button = Button(
@@ -98,7 +100,7 @@ class LevelSelectMenu:
             hover_color=(255, 255, 0),
             bg_color=(80, 50, 50)
         )
-    
+
     def get_available_levels(self):
         levels = []
         level_dir = cfg.LEVELFILEDIR
@@ -111,7 +113,7 @@ class LevelSelectMenu:
                     except ValueError:
                         continue
         return sorted(levels)
-    
+
     def run(self):
         self.running = True
         while self.running:
@@ -120,37 +122,36 @@ class LevelSelectMenu:
             self.render()
 
         return self.selected_level
-    
+
     def render(self):
         self.window.fill(cfg.WINDOW_COLOR)
-        
+
         # 绘制标题
         self.window.blit(self.title_surface, self.title_rect)
 
         # 绘制关卡按钮
         for level, button in self.level_buttons:
             button.draw(self.window)
-        
+
         # 绘制返回按钮
         self.back_button.draw(self.window)
-        
+
         pygame.display.update()
-    
+
     def update(self):
         self.get_event()
 
-    
     def get_event(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.quit_game()
-            
+
             elif event.type == pygame.MOUSEMOTION:
                 # 更新按钮悬停状态
                 for level, button in self.level_buttons:
                     button.check_hover(event.pos)
                 self.back_button.check_hover(event.pos)
-            
+
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # 左键点击
                     for level, button in self.level_buttons:
@@ -158,11 +159,11 @@ class LevelSelectMenu:
                             print(f"选择第 {level} 关")
                             self.selected_level = level
                             self.running = False
-                    
+
                     if self.back_button.is_clicked(event.pos):
                         print("返回主菜单")
                         self.running = False
-    
+
     def quit_game(self):
         self.running = False
         print("退出游戏")
@@ -171,30 +172,30 @@ class LevelSelectMenu:
 
 
 class MultiplayerMenu:
-    
+
     def __init__(self):
         self.running = None
         pygame.display.init()
         pygame.font.init()
-        
+
         self.window_size = (cfg.WIDTH, cfg.HEIGHT)
         self.window = pygame.display.set_mode(self.window_size)
         pygame.display.set_caption(cfg.TITLE + " - 多人游戏")
-        
+
         self.clock = pygame.time.Clock()
-        
+
         # 标题
         title_font = pygame.font.Font(cfg.FONTPATH, 36)
         self.title_surface = title_font.render("多人游戏", True, (255, 255, 255))
         self.title_rect = self.title_surface.get_rect(center=(self.window_size[0] // 2, 50))
-        
+
         # 创建按钮
         button_width = 200
         button_height = 60
         center_x = self.window_size[0] // 2
         start_y = 150
         button_spacing = 20
-        
+
         self.create_host_button = Button(
             center_x - button_width // 2,
             start_y,
@@ -207,7 +208,7 @@ class MultiplayerMenu:
             hover_color=(255, 255, 0),
             bg_color=(50, 50, 50)
         )
-        
+
         self.join_host_button = Button(
             center_x - button_width // 2,
             start_y + button_height + button_spacing,
@@ -220,7 +221,7 @@ class MultiplayerMenu:
             hover_color=(255, 255, 0),
             bg_color=(50, 50, 50)
         )
-        
+
         self.back_button = Button(
             center_x - button_width // 2,
             start_y + (button_height + button_spacing) * 2 + 20,
@@ -233,60 +234,60 @@ class MultiplayerMenu:
             hover_color=(255, 255, 0),
             bg_color=(80, 50, 50)
         )
-        
+
         self.selected_mode = None
-    
+
     def run(self):
         self.running = True
         while self.running:
             self.clock.tick(60)
             self.render()
             self.update()
-        
+
         return self.selected_mode
-    
+
     def render(self):
         self.window.fill(cfg.WINDOW_COLOR)
-        
+
         # 绘制标题
         self.window.blit(self.title_surface, self.title_rect)
-        
+
         # 绘制按钮
         self.create_host_button.draw(self.window)
         self.join_host_button.draw(self.window)
         self.back_button.draw(self.window)
-        
+
         pygame.display.update()
-    
+
     def update(self):
         self.get_event()
-    
+
     def get_event(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.quit_game()
-            
+
             elif event.type == pygame.MOUSEMOTION:
                 self.create_host_button.check_hover(event.pos)
                 self.join_host_button.check_hover(event.pos)
                 self.back_button.check_hover(event.pos)
-            
+
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     if self.create_host_button.is_clicked(event.pos):
                         print("创建房间")
                         self.selected_mode = 'host'
                         self.running = False
-                    
+
                     elif self.join_host_button.is_clicked(event.pos):
                         print("加入房间")
                         self.selected_mode = 'join'
                         self.running = False
-                    
+
                     elif self.back_button.is_clicked(event.pos):
                         print("返回主菜单")
                         self.running = False
-    
+
     def quit_game(self):
         self.running = False
         print("退出游戏")
@@ -404,7 +405,7 @@ class HostWaitingScreen:
         # 获取本机IP
         self.local_ip = self._get_local_ip()
 
-    #临时socket用于获取本机IP
+    # 临时socket用于获取本机IP
     @staticmethod
     def _get_local_ip():
         try:
@@ -413,7 +414,7 @@ class HostWaitingScreen:
             ip = s.getsockname()[0]
             s.close()
             return ip
-        except:
+        except Exception:
             pass
 
     def run(self):
@@ -467,16 +468,16 @@ class MainMenu:
         self.running = None
         pygame.display.init()
         pygame.font.init()
-        
+
         self.window_size = (cfg.WIDTH, cfg.HEIGHT)
         self.window = pygame.display.set_mode(self.window_size)
         pygame.display.set_caption(cfg.TITLE)
-        
+
         self.clock = pygame.time.Clock()
-        
+
         # 初始化图片缓存
         OtherImageCache.initialize(cfg)
-        
+
         # 加载logo图片
         try:
             self.logo_image = OtherImageCache.get_other_image('logo')
@@ -485,19 +486,19 @@ class MainMenu:
             logo_height = int(self.logo_image.get_height() * (logo_width / self.logo_image.get_width()))
             self.logo_image = pygame.transform.scale(self.logo_image, (logo_width, logo_height))
             self.logo_rect = self.logo_image.get_rect(center=(self.window_size[0] // 2, 50))
-        except:
+        except Exception:
             self.logo_image = None
-            
+
         # 创建按钮
         button_width = 200
         button_height = 60
         center_x = self.window_size[0] // 2
-        
+
         # 计算按钮位置
         button_spacing = 20
         total_height = button_height * 2 + button_spacing
         start_y = (self.window_size[1] - total_height) // 2 + 100
-        
+
         self.single_player_button = Button(
             center_x - button_width // 2,
             start_y,
@@ -510,7 +511,7 @@ class MainMenu:
             hover_color=(255, 255, 0),
             bg_color=(50, 50, 50)
         )
-        
+
         self.multi_player_button = Button(
             center_x - button_width // 2,
             start_y + button_height + button_spacing,
@@ -523,11 +524,10 @@ class MainMenu:
             hover_color=(255, 255, 0),
             bg_color=(50, 50, 50)
         )
-        
+
     def run(self):
         """运行主菜单"""
 
-        
         self.running = True
         while self.running:
             self.clock.tick(60)
@@ -536,7 +536,6 @@ class MainMenu:
 
             self.render()
 
-        
         pygame.quit()
         exit()
 
@@ -553,6 +552,7 @@ class MainMenu:
         self.multi_player_button.draw(self.window)
 
         pygame.display.update()
+
     def update(self):
         self.get_event()
 
@@ -573,7 +573,7 @@ class MainMenu:
                         # 点击单人游戏，进入关卡选择
                         print("进入关卡选择")
                         selected_level = LevelSelectMenu().run()
-                        
+
                         if selected_level is not None:
                             game = MainGame()
                             game.start_game(str(selected_level))

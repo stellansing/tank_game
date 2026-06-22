@@ -32,11 +32,9 @@ class ClientNetwork:
         # 关卡切换
         self._pending_level_reset = False
 
-
         # 输入发送
         self._last_input_time = 0.0
         self._input_send_interval = 1.0 / 60.0  # 最多60次/秒
-
 
     @property
     def is_connected(self) -> bool:
@@ -118,7 +116,6 @@ class ClientNetwork:
 
         self._process_incoming()
 
-
     def send_input(self, key_order: list, space_pressed: bool):
         if not self._connected:
             return
@@ -176,11 +173,9 @@ class ClientNetwork:
             print(f"Host断开连接: {reason}")
             self._connected = False
 
-
     def _handle_connect_ack(self, msg):
         self._connected = True
         print(f"连接确认")
-
 
     def _handle_state(self, msg):
         snapshot = GameStateSnapshot(
@@ -193,7 +188,6 @@ class ClientNetwork:
         )
         with self._snapshot_lock:
             self._latest_snapshot = snapshot
-
 
     def _handle_level_data(self, msg):
         self._level_config = msg.get("config", {})

@@ -20,9 +20,7 @@ class UDPSocket:
     def set_remote(self, host, port):
         self._remote_addr = (host, port)
 
-    #发送数据
-    def send(self, data: bytes, addr:Tuple= None) -> bool:
-
+    def send(self, data: bytes, addr: Tuple = None) -> bool:
         target = addr or self._remote_addr
         if target is None:
             return False
@@ -32,11 +30,9 @@ class UDPSocket:
         except (OSError, socket.error):
             return False
 
-    def receive(self, timeout= 0.5):
+    def receive(self, timeout=0.5):
         try:
-            #非阻塞接收
             ready = select.select([self._sock], [], [], timeout)
-            #ready[0]对应sock可读列表
             if ready[0]:
                 data, addr = self._sock.recvfrom(self._buffer_size)
                 return data, addr

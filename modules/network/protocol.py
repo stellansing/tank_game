@@ -28,7 +28,7 @@ class TankData:
     hp: int
     live: bool
     tank_type: str
-    enemy_type: str = ""  #敌人种类
+    enemy_type: str = ""  # 敌人种类
 
 
 @dataclass
@@ -108,7 +108,7 @@ class NetworkMessage:
         message = {"type": msg_type.value}
         if data:
             message.update(data)
-        json_str = json.dumps(message, separators=(',', ':'))#压缩传输量
+        json_str = json.dumps(message, separators=(',', ':'))  # 压缩传输量
         return json_str.encode(NetworkMessage.ENCODING)
 
     @staticmethod

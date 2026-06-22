@@ -1,8 +1,9 @@
 import pygame
 import cfg
-'''坦克图片缓存管理器 - 用于预加载和共享图片资源'''
+
 
 class TankImageCache:
+    '''坦克图片缓存管理器 - 用于预加载和共享图片资源'''
     _cache = {}
 
     @classmethod
@@ -26,19 +27,17 @@ class TankImageCache:
 
                 # 切割下方图片（第2行，y=frame_height）
                 direction_images['D1'] = image.subsurface(0, frame_height, frame_width, frame_height)
-                direction_images['D2'] = image.subsurface(frame_width, frame_height, frame_width,frame_height)
+                direction_images['D2'] = image.subsurface(frame_width, frame_height, frame_width, frame_height)
 
                 # 切割左方图片（第3行，y=2*frame_height）
                 direction_images['L1'] = image.subsurface(0, 2 * frame_height, frame_width, frame_height)
-                direction_images['L2'] = image.subsurface(frame_width, 2 * frame_height, frame_width,frame_height)
+                direction_images['L2'] = image.subsurface(frame_width, 2 * frame_height, frame_width, frame_height)
 
                 # 切割右方图片（第4行，y=3*frame_height）
                 direction_images['R1'] = image.subsurface(0, 3 * frame_height, frame_width, frame_height)
-                direction_images['R2'] = image.subsurface(frame_width, 3 * frame_height, frame_width,frame_height)
+                direction_images['R2'] = image.subsurface(frame_width, 3 * frame_height, frame_width, frame_height)
 
                 cls._cache[player_key].append(direction_images)
-
-
         for enemy_key, paths in cfg.ENEMY_TANK_IMAGE_PATHS.items():
             cls._cache[enemy_key] = []
             for path in paths:
@@ -86,8 +85,10 @@ class TankImageCache:
             return cls._cache[tank_type][level]
         return None
 
+
 class OtherImageCache:
     _cache = {}
+
     @classmethod
     def initialize(cls, cfg):
         cls._cache.clear()

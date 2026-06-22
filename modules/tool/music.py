@@ -1,5 +1,6 @@
 import pygame
 
+
 class Music:
     _initialized = False
 
@@ -12,6 +13,7 @@ class Music:
 
     def play_music(self):
         pygame.mixer.music.play()
+
 
 class Sound:
     _initialized = False

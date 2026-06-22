@@ -23,9 +23,13 @@ def _suppress_libpng_warnings():
     t = threading.Thread(target=_filter, daemon=True)
     t.start()
 
+
 _suppress_libpng_warnings()
 
-from modules.MainMenu import MainMenu
+
+# Import after libpng warning suppression (must be after stderr redirect)
+from modules.MainMenu import MainMenu  # noqa: E402
+
 
 if __name__ == '__main__':
     MainMenu().run()

@@ -14,6 +14,7 @@ from modules.network.protocol import GameStateSnapshot, NetworkMessage, InputDat
 from globalCache import OtherImageCache
 import cfg
 
+
 class NormalVariables:
     def __init__(self):
         self.teammate_reborn_position = None
@@ -46,7 +47,9 @@ class NormalVariables:
 
 
 class TanksEvent:
-    def __init__(self, my_tank,enemy_tanks,my_bullets ,enemy_bullets, walls, all_collision, ices, normal_variables):
+    def __init__(self, my_tank, enemy_tanks, my_bullets,
+                 enemy_bullets, walls, all_collision, ices,
+                 normal_variables):
         self.normal_variables = normal_variables
         self.all_collision = all_collision
 
@@ -68,8 +71,8 @@ class TanksEvent:
         self.tanks_shot()
 
     def render(self):
-        nv=self.normal_variables
-        #所有坦克的渲染
+        nv = self.normal_variables
+        # 所有坦克的渲染
         if self.my_tank and self.my_tank.live:
             self.my_tank.display_tank()
         elif pygame.time.get_ticks() - self.my_tank.last_dead_time > nv.reborn_interval and self.my_tank.hp > 0:  # 考虑移至更新模块中处理
@@ -81,20 +84,20 @@ class TanksEvent:
     def tank_creation(self):
         self.create_my_tank()
         self.allocated_tank_id += 1
-    
+
     def create_my_tank(self):
         nv = self.normal_variables
         MainGame.my_tank = MyTank(nv.initial_reborn_position, nv.window, nv.window_size, self.allocated_tank_id)
         self.my_tank = MainGame.my_tank
         self.all_collision.add(MainGame.my_tank)
 
-    #随机创建敌人-更新
+    # 随机创建敌人-更新
     def random_create_enemy_tanks(self):
         nv = self.normal_variables
         if len(self.enemy_tanks) < nv.max_enemy_tanks and nv.total_created_enemy_tanks < nv.total_enemy_tanks:
             position = random.choice(nv.enemy_tanks_positions)
             if not self.create_enemy_tank(position):
-                self.allocated_tank_id-=1
+                self.allocated_tank_id -= 1
 
     def create_enemy_tank(self, position):
         nv = self.normal_variables
@@ -108,7 +111,8 @@ class TanksEvent:
             self.all_collision.add(enemy_tank)
             return True
         return False
-    #射击-更新
+    # 射击-更新
+
     def tanks_shot(self):
         self.all_players_shot()
         self.enemy_tank_shot()
@@ -122,6 +126,7 @@ class TanksEvent:
                     self.allocated_bullet_id += 1
                     self.my_bullets.add(bullet)
                 # self.fire_music.play_music()
+
     def enemy_tank_shot(self):
         for enemy in self.enemy_tanks:
 
@@ -134,7 +139,6 @@ class TanksEvent:
         self.all_players_move()
         self.all_enemy_tanks_move()
 
-
     def all_players_move(self):
         nv = self.normal_variables
         if self.my_tank and self.my_tank.live:
@@ -144,7 +148,6 @@ class TanksEvent:
                 self.player_tank_move(self.my_tank, last_direction)
             elif self.my_tank.on_ice and self.my_tank.ice_inertia_direction:
                 self.player_tank_move(self.my_tank, self.my_tank.ice_inertia_direction)
-
 
     def player_tank_move(self, tank, direction):
         old_rect = tank.rect.copy()
@@ -219,7 +222,8 @@ class TanksEvent:
 
 
 class BulletsEvent:
-    def __init__(self,my_bullets,enemy_bullets,normal_variables):
+    def __init__(self, my_bullets, enemy_bullets,
+                 normal_variables):
         self.normal_variables = normal_variables
         self.my_bullets = my_bullets
         self.enemy_bullets = enemy_bullets
@@ -232,14 +236,17 @@ class BulletsEvent:
             bullet.display_bullet(self.normal_variables.window)
         for bullet in self.enemy_bullets:
             bullet.display_bullet(self.normal_variables.window)
+
     def bullets_move(self):
         for bullet in self.my_bullets:
             bullet.move(self.normal_variables.window_size)
         for bullet in self.enemy_bullets:
             bullet.move(self.normal_variables.window_size)
 
+
 class ScenesEvent:
-    def __init__(self, all_collision, walls, rivers, trees, ices, normal_variables):
+    def __init__(self, all_collision, walls, rivers, trees, ices,
+                 normal_variables):
         self.normal_variables = normal_variables
 
         self.all_collision = all_collision
@@ -250,8 +257,10 @@ class ScenesEvent:
 
         self.allocated_scenes_id = 0
         self._river_variant_counter = 0
+
     def scenes_update(self):
         pass
+
     def render(self):
         nv = self.normal_variables
         for wall in self.walls:
@@ -268,13 +277,14 @@ class ScenesEvent:
         nv = self.normal_variables
         for tree in self.trees:
             tree.display_static_entity(nv.window)
+
     def scenes_creation(self, scenes_type, position):
         if scenes_type == 'B':
             self.create_brick_wall(position, self.allocated_scenes_id)
-            self.allocated_scenes_id+=1
+            self.allocated_scenes_id += 1
         elif scenes_type == 'I':
             self.create_steel_wall(position, self.allocated_scenes_id)
-            self.allocated_scenes_id+=1
+            self.allocated_scenes_id += 1
         elif scenes_type == 'R':
             self.create_river_wall(position)
         elif scenes_type == 'C':
@@ -317,8 +327,11 @@ class ScenesEvent:
         self.allocated_scenes_id += 1
         self.trees.add(tree)
 
+
 class CollisionEvent:
-    def __init__(self, my_tank,enemy_tanks,my_bullets ,enemy_bullets, walls, rivers, explosions, normal_variables, teammate_tank=None, home=None):
+    def __init__(self, my_tank, enemy_tanks, my_bullets,
+                 enemy_bullets, walls, rivers, explosions,
+                 normal_variables, teammate_tank=None, home=None):
         self.normal_variables = normal_variables
         self.my_tank = my_tank
         self.teammate_tank = teammate_tank
@@ -331,7 +344,6 @@ class CollisionEvent:
         self.rivers = rivers
         self.explosions = explosions
         self.home = home
-
 
         self.default_collided = pygame.sprite.collide_rect_ratio(0.8)
         self._explosion_id_counter = 0
@@ -353,6 +365,7 @@ class CollisionEvent:
                     ready_remove.append(explosion)
             for explosion in ready_remove:
                 explosion.kill()
+
     def tank_bullet_collision(self):
         collision_results = {
             'explosion': []
@@ -362,7 +375,7 @@ class CollisionEvent:
         hits = groupcollide(self.my_bullets, self.enemy_tanks, True, True, collided=self.default_collided)
         for bullet, tanks in hits.items():
             if bullet.owner_tank:
-                bullet.owner_tank.bullet_live=False
+                bullet.owner_tank.bullet_live = False
             for tank in tanks:
                 tank.hp -= 1
                 if tank.hp <= 0:
@@ -374,14 +387,14 @@ class CollisionEvent:
                         bullet.owner_tank.kills += 1
                 collision_results['explosion'].append(tank)
 
-        #子弹碰撞
-        hits=groupcollide(self.enemy_bullets, self.my_bullets, True, True)
+        # 子弹碰撞
+        hits = groupcollide(self.enemy_bullets, self.my_bullets, True, True)
         for enemy_bullet, my_bullets in hits.items():
             if enemy_bullet.owner_tank:
-                enemy_bullet.owner_tank.bullet_live=False
+                enemy_bullet.owner_tank.bullet_live = False
             for my_bullet in my_bullets:
                 if my_bullet.owner_tank:
-                    my_bullet.owner_tank.bullet_live=False
+                    my_bullet.owner_tank.bullet_live = False
 
         # 我方坦克和子弹的碰撞
         if self.my_tank and self.my_tank.live:
@@ -394,8 +407,8 @@ class CollisionEvent:
                 self.tank_dead(self.my_tank)
 
                 for bullet in hits:
-                        if bullet.owner_tank:
-                            bullet.owner_tank.bullet_live = False
+                    if bullet.owner_tank:
+                        bullet.owner_tank.bullet_live = False
 
         # 队友坦克和子弹的碰撞
         if self.teammate_tank and self.teammate_tank.live:
@@ -414,19 +427,20 @@ class CollisionEvent:
         for tank in collision_results['explosion']:
             self.create_explosion(tank)
 
-    def tank_dead(self,tank):
+    def tank_dead(self, tank):
         tank.last_dead_time = pygame.time.get_ticks()
+
     def bullet_wall_collision(self):
         # 子弹与墙的碰撞
 
-        collision_results={
-            'explosion':[]
+        collision_results = {
+            'explosion': []
         }
 
         hits = pygame.sprite.groupcollide(self.my_bullets, self.walls, True, False)
         for bullet, walls in hits.items():
             if bullet.owner_tank:
-                bullet.owner_tank.bullet_live=False
+                bullet.owner_tank.bullet_live = False
             collision_results['explosion'].append(bullet)
 
             for wall in walls:
@@ -440,7 +454,7 @@ class CollisionEvent:
         for wall, bullets in hits.items():
             for bullet in bullets:
                 if bullet.owner_tank:
-                    bullet.owner_tank.bullet_live=False
+                    bullet.owner_tank.bullet_live = False
                 collision_results['explosion'].append(bullet)
 
             if wall.type == 'brick':
@@ -451,6 +465,7 @@ class CollisionEvent:
 
         for bullet in collision_results['explosion']:
             self.create_bullet_explosion(bullet)
+
     def bullet_home_collision(self):
         if self.home and self.home.live:
             hits = spritecollide(self.home, self.enemy_bullets, True)
@@ -479,8 +494,10 @@ class CollisionEvent:
         self._explosion_id_counter += 1
         self.explosions.add(explode)
 
+
 class GameResultEvent:
-    def __init__(self, normal_variables,my_tank,enemy_tanks, teammate_tank=None):
+    def __init__(self, normal_variables, my_tank, enemy_tanks,
+                 teammate_tank=None):
         self.normal_variables = normal_variables
         self.my_tank = my_tank
         self.teammate_tank = teammate_tank
@@ -511,12 +528,13 @@ class GameResultEvent:
     def game_win_check(self):
         if self.normal_variables.remaining_enemies <= 0:
             self.normal_variables.game_win = True
+
     def game_result_check(self):
         nv = self.normal_variables
         if nv.game_win:
             my_font = pygame.font.Font(cfg.FONTPATH, 50)
             win_text = my_font.render('You Win', True, pygame.Color(255, 0, 0))
-            nv.window.blit(win_text, ( nv.window_size[0] / 2 - win_text.get_width() / 2, nv.window_size[1] / 2 - win_text.get_height() / 2))
+            nv.window.blit(win_text, (nv.window_size[0] / 2 - win_text.get_width() / 2, nv.window_size[1] / 2 - win_text.get_height() / 2))
             return True
         elif nv.game_lose:
             # 加载失败图片
@@ -524,9 +542,11 @@ class GameResultEvent:
             logo_width = 300
             logo_height = int(game_over_image.get_height() * (logo_width / game_over_image.get_width()))
             game_over_image = pygame.transform.scale(game_over_image, (logo_width, logo_height))
-            nv.window.blit(game_over_image, (nv.window_size[0] / 2 - game_over_image.get_width() / 2,nv.window_size[1] / 2 - game_over_image.get_height() / 2))
+            nv.window.blit(game_over_image, (nv.window_size[0] / 2 - game_over_image.get_width() / 2, nv.window_size[1] / 2 - game_over_image.get_height() / 2))
             return True
         return False
+
+
 class MainGame:
     window = None
 
@@ -583,13 +603,21 @@ class MainGame:
         # 加载指定关卡
         self.load_lvl(str(level))
 
-        self.tanks_event=TanksEvent(self.my_tank,self.enemy_tanks,self.my_bullets ,self.enemy_bullets, self.walls, self.all_collision, self.ices, nv)
+        self.tanks_event = TanksEvent(self.my_tank, self.enemy_tanks,
+                                      self.my_bullets, self.enemy_bullets,
+                                      self.walls, self.all_collision,
+                                      self.ices, nv)
         self.tanks_event.tank_creation()
 
-        self.game_result_event=GameResultEvent(nv,self.my_tank,self.enemy_tanks)
-        self.collision_event=CollisionEvent(self.my_tank,self.enemy_tanks,self.my_bullets ,self.enemy_bullets, self.walls, self.rivers, self.explosions, nv, home=nv.home)
+        self.game_result_event = GameResultEvent(nv, self.my_tank, self.enemy_tanks)
+        self.collision_event = CollisionEvent(self.my_tank, self.enemy_tanks,
+                                              self.my_bullets,
+                                              self.enemy_bullets, self.walls,
+                                              self.rivers, self.explosions, nv,
+                                              home=nv.home)
 
-        self.bullet_event=BulletsEvent(self.my_bullets,self.enemy_bullets,self.normal_variables)
+        self.bullet_event = BulletsEvent(self.my_bullets, self.enemy_bullets,
+                                         self.normal_variables)
         self.panel_x = cfg.WIDTH + 10
         SoundManager.play_start()
 
@@ -627,10 +655,10 @@ class MainGame:
                         # 将窗口恢复为原始大小
                         pygame.display.set_mode((cfg.WIDTH, cfg.HEIGHT))
                         return
-                #过渡中
+                # 过渡中
                 continue
 
-            #主游戏逻辑
+            # 主游戏逻辑
             self.update()
             self.render()
 
@@ -638,7 +666,7 @@ class MainGame:
 
     def load_lvl(self, level):
         """加载关卡文件"""
-        nv=self.normal_variables
+        nv = self.normal_variables
 
         path = cfg.LEVELFILEDIR + '/' + str(level) + '.lvl'
 
@@ -696,7 +724,7 @@ class MainGame:
                 config['enemy_tank_pos'] = positions
             elif line and not line.startswith('#') and not line.startswith('%'):
                 for row_i, elem in enumerate(line.split(' ')):
-                    self.scenes_event.scenes_creation(elem,(row_i * self.normal_variables.cell_len, num_row * self.normal_variables.cell_len))
+                    self.scenes_event.scenes_creation(elem, (row_i * self.normal_variables.cell_len, num_row * self.normal_variables.cell_len))
                 num_row += 1
 
         # 创建 home
@@ -722,8 +750,6 @@ class MainGame:
             nv.teammate_reborn_position = nv.initial_reborn_position
         nv.enemy_tanks_positions = config.get('enemy_tank_pos', [(0, 0), (288, 0), (576, 0)])
 
-
-
     def update(self):
 
         self.tanks_event.tanks_update()
@@ -735,7 +761,7 @@ class MainGame:
 
     def render(self):
         """渲染所有元素"""
-        nv=self.normal_variables
+        nv = self.normal_variables
 
         self.window.fill((0, 0, 0))
         # 加载并显示背景图片
@@ -785,7 +811,7 @@ class MainGame:
         return text_surface
 
     def get_event(self):
-        nv=self.normal_variables
+        nv = self.normal_variables
         event_list = pygame.event.get()
         for event in event_list:
             if event.type == pygame.QUIT:
@@ -810,8 +836,6 @@ class MainGame:
                 elif event.key == pygame.K_DOWN and 'D' in nv.key_order:
                     nv.key_order.remove('D')
         nv.keys_pressed = pygame.key.get_pressed()
-
-
 
     def end_game(self):
         # 清理网络资源
@@ -880,7 +904,7 @@ class MultiplayerGame:
     TRANSITION_DELAY = 3000  # 关卡切换显示时间（毫秒）
 
     def __init__(self, host_network=None, host_ip=None):
-        #主机则传入network对象并依据此判断标记
+        # 主机则传入network对象并依据此判断标记
         self._host_network = host_network
         self._host_ip = host_ip
         self._client_network = None
@@ -894,7 +918,7 @@ class MultiplayerGame:
 
         # Host端：队友坦克（客户端控制的坦克）
         self._teammate_tank = None
-        self.last_teammate_direction= None
+        self.last_teammate_direction = None
         self.last_is_teammate_shot = True
 
         # Client端：渲染用的精灵组
@@ -1026,7 +1050,7 @@ class MultiplayerGame:
                 # 同步状态到客户端
                 self._sync_to_client()
                 pygame.display.update()
- 
+
                 if pygame.time.get_ticks() - self._transition_timer > self.TRANSITION_DELAY:
                     if nv.game_win:
                         next_level = nv.current_level + 1
@@ -1041,7 +1065,6 @@ class MultiplayerGame:
                         pygame.display.set_mode((cfg.WIDTH, cfg.HEIGHT))
                         self._running = False
                 continue
-
 
             self._update_host()
             self._render_host()
@@ -1170,7 +1193,6 @@ class MultiplayerGame:
         )
         MainGame.all_collision.add(self._teammate_tank)
 
-
     def _get_host_events(self):
         nv = self.nv
         event_list = pygame.event.get()
@@ -1204,6 +1226,7 @@ class MultiplayerGame:
                 self._process_client_input(client_input)
             else:
                 self._continue_client_input()
+
     def _continue_client_input(self):
         # 移动队友坦克
         if self.last_teammate_direction:
@@ -1217,6 +1240,7 @@ class MultiplayerGame:
             if bullet:
                 self._tanks_event.allocated_bullet_id += 1
                 MainGame.my_bullets.add(bullet)
+
     def _process_client_input(self, input_data):
 
         # 移动队友坦克
@@ -1301,7 +1325,7 @@ class MultiplayerGame:
         self._scenes_event.render_trees()
 
         # 检查游戏是否结束，通知客户端（只发送一次）
-        #_game_over_sent仅仅使用一次
+        # _game_over_sent 仅仅使用一次
         if not getattr(self, '_game_over_sent', False):
             if self.nv.game_win:
                 self._host_network.send_game_over('win')
@@ -1681,8 +1705,9 @@ class MultiplayerGame:
         # 更新子弹
         self._render_bullets.empty()
         for bullet_snap in snapshot.bullets:
-            bullet = Bullet(None, bullet_snap['id'], position=(bullet_snap['x'], bullet_snap['y']),
-                          direction=bullet_snap['direction'])
+            bullet = Bullet(None, bullet_snap['id'],
+                            position=(bullet_snap['x'], bullet_snap['y']),
+                            direction=bullet_snap['direction'])
             self._render_bullets.add(bullet)
 
         # 更新墙体（只在初始加载时创建，后续只更新状态）
@@ -1715,17 +1740,16 @@ class MultiplayerGame:
                         wall.kill()
                     self._render_walls.add(wall)
 
-
         # 更新爆炸
         self._render_explosions.empty()
         for ed in snapshot.explosions:
             explode_type = ed.get('explode_type', 'explode')
             if explode_type == 'explode':
                 exp = Explode(None, position=(ed['x'], ed['y']),
-                            explode_id=ed['id'])
+                              explode_id=ed['id'])
             else:
                 exp = BulletExplode(None, position=(ed['x'], ed['y']),
-                                  explode_id=ed['id'])
+                                    explode_id=ed['id'])
             exp.step = ed.get('step', 0)
             if exp.step < len(exp.images):
                 exp.image = exp.images[exp.step]
@@ -1771,8 +1795,6 @@ class MultiplayerGame:
         for bullet in self._render_bullets:
             bullet.display_bullet(self._window)
 
-
-
         # 渲染 home
         if self._client_home:
             self._client_home.display_static_entity(self._window)
@@ -1785,6 +1807,7 @@ class MultiplayerGame:
         for explosion in self._render_explosions:
             if explosion.live:
                 explosion.display_explode(self._window)
+
         # 信息面板
         game_info = getattr(self, '_snapshot_game_info', {})
         font = pygame.font.Font(cfg.FONTPATH, 20)
