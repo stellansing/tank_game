@@ -51,6 +51,15 @@ class WallData:
 
 
 @dataclass
+class HomeData:
+    """基地（home）状态数据"""
+    x: int
+    y: int
+    live: bool
+    destroyed: bool
+
+
+@dataclass
 class ExplosionData:
     """爆炸效果数据"""
     id: int
@@ -85,6 +94,7 @@ class GameStateSnapshot:
     bullets: list = field(default_factory=list)
     walls: list = field(default_factory=list)
     explosions: list = field(default_factory=list)
+    home: Optional[dict] = None
     game_info: Optional[dict] = None
 
 
@@ -196,6 +206,15 @@ class NetworkMessage:
             y=explosion.rect.center[1],
             step=explosion.step,
             explode_type=explosion.type
+        ))
+
+    @staticmethod
+    def home_to_data(home) -> dict:
+        return asdict(HomeData(
+            x=home.rect.left,
+            y=home.rect.top,
+            live=home.live,
+            destroyed=home.destroyed,
         ))
 
     @staticmethod

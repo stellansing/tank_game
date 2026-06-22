@@ -30,6 +30,9 @@ class ClientNetwork:
         self._game_started = False
         self._game_result: Optional[str] = None
 
+        # 关卡切换
+        self._pending_level_reset = False
+
 
         # 输入发送
         self._last_input_time = 0.0
@@ -60,6 +63,19 @@ class ClientNetwork:
     @property
     def game_result(self):
         return self._game_result
+
+    @property
+    def pending_level_reset(self):
+        """检查是否需要因关卡切换重置渲染数据（一次性消费）"""
+        if self._pending_level_reset:
+            self._pending_level_reset = False
+            return True
+        return False
+
+    def clear_snapshot(self):
+        """清除缓存的快照，用于关卡切换时避免使用旧状态"""
+        with self._snapshot_lock:
+            self._latest_snapshot = None
 
     def connect(self, host, port= None) -> bool:
         port = port or cfg.NETWORK_PORT
@@ -185,6 +201,7 @@ class ClientNetwork:
             bullets=msg.get("bullets", []),
             walls=msg.get("walls", []),
             explosions=msg.get("explosions", []),
+            home=msg.get("home"),
             game_info=msg.get("game_info", {})
         )
         with self._snapshot_lock:
@@ -194,3 +211,4 @@ class ClientNetwork:
     def _handle_level_data(self, msg):
         self._level_config = msg.get("config", {})
         self._walls_data = msg.get("walls", [])
+        self._pending_level_reset = True

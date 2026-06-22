@@ -153,7 +153,7 @@ class TanksEvent:
         old_rect = tank.rect.copy()
         old_direction = tank.direction
 
-        self._apply_ice_effect(tank)
+        self.apply_ice_effect(tank)
         tank.move(direction)
 
         if old_direction[0] != direction:
@@ -163,8 +163,7 @@ class TanksEvent:
         if pygame.sprite.spritecollideany(tank, other_tanks):
             tank.rect = old_rect
 
-    def _apply_ice_effect(self, tank):
-        """Check if tank is on ice and apply speed boost + set inertia direction."""
+    def apply_ice_effect(self, tank):
         tank.on_ice = False
         for ice in self.ices:
             if tank.rect.colliderect(ice.rect):
@@ -183,7 +182,7 @@ class TanksEvent:
         old_rect = tank.rect.copy()
         old_direction = tank.direction
 
-        self._apply_ice_effect(tank)
+        self.apply_ice_effect(tank)
         tank.rand_move()
 
         if old_direction[0] != tank.direction:
@@ -373,6 +372,9 @@ class CollisionEvent:
                     tank.live = False
                     self.normal_variables.remaining_enemies -= 1
                     tank.kill()
+                    # 击杀计数：子弹所属坦克击杀数+1
+                    if bullet.owner_tank:
+                        bullet.owner_tank.kills += 1
                 collision_results['explosion'].append(tank)
 
         #子弹碰撞
@@ -453,7 +455,6 @@ class CollisionEvent:
         for bullet in collision_results['explosion']:
             self.create_bullet_explosion(bullet)
     def bullet_home_collision(self):
-        """检测敌人子弹与 home 的碰撞。"""
         if self.home and self.home.live:
             hits = spritecollide(self.home, self.enemy_bullets, True)
             if hits:
@@ -464,7 +465,6 @@ class CollisionEvent:
                 self.create_explosion_on_home()
 
     def create_explosion_on_home(self):
-        """在 home 位置创建爆炸效果。"""
         explode = Explode(self.home, explode_id=self._explosion_id_counter)
         self._explosion_id_counter += 1
         self.explosions.add(explode)
@@ -476,13 +476,11 @@ class CollisionEvent:
         explode = Explode(tank, explode_id=self._explosion_id_counter)
         self._explosion_id_counter += 1
         self.explosions.add(explode)
-        # self.hit_music.play_music()
 
     def create_bullet_explosion(self, bullet):
         explode = BulletExplode(bullet, explode_id=self._explosion_id_counter)
         self._explosion_id_counter += 1
         self.explosions.add(explode)
-        # self.hit_music.play_music()
 
 class GameResultEvent:
     def __init__(self, normal_variables,my_tank,enemy_tanks, teammate_tank=None):
@@ -497,12 +495,10 @@ class GameResultEvent:
         self.game_result_check()
 
     def check_game_state(self):
-        """只检查游戏胜负状态，不渲染"""
         self.game_win_check()
         self.game_lose_check()
 
     def render_game_result(self):
-        """渲染游戏结果（在所有图层之上）"""
         self.game_result_check()
 
     def game_lose_check(self):
@@ -554,6 +550,8 @@ class MainGame:
 
     clock = None
 
+    TRANSITION_DELAY = 3000
+
     def __init__(self):
 
         self.normal_variables = NormalVariables()
@@ -567,9 +565,11 @@ class MainGame:
         self.tanks_event = None
         self.bullet_event = None
 
-        # self.fire_music = Sound(cfg.AUDIO_PATHS['fire'])
-        # self.hit_music = Sound(cfg.AUDIO_PATHS['hit'])
         self.is_multiplayer = False
+
+        # 关卡切换相关
+        self._transition_timer = 0
+        self._last_level_kills = 0  # 上一关的击杀数
 
     def start_game(self, level='1'):
         """启动游戏，可指定关卡"""
@@ -587,9 +587,7 @@ class MainGame:
         self.scenes_event = ScenesEvent(self.all_collision, self.walls, self.rivers, self.trees, self.ices, nv)
         # 加载指定关卡
         self.load_lvl(str(level))
-        # Music(cfg.AUDIO_PATHS['start']).play_music()
 
-        
         self.tanks_event=TanksEvent(self.my_tank,self.enemy_tanks,self.my_bullets ,self.enemy_bullets, self.walls, self.all_collision, self.ices, nv)
         self.tanks_event.tank_creation()
 
@@ -600,13 +598,44 @@ class MainGame:
         self.panel_x = cfg.WIDTH + 10
         SoundManager.play_start()
 
-
-
+        self._transition_timer = 0
         while True:
             MainGame.clock.tick(cfg.INITIAL_TICK)
 
             self.get_event()
 
+            nv = self.normal_variables
+
+            # 处理关卡胜利/失败过渡
+            if nv.game_win or nv.game_lose:
+                # 过渡初始化
+                if self._transition_timer == 0:
+                    self._transition_timer = pygame.time.get_ticks()
+                    # 首次进入过渡时保存击杀数
+                    if nv.game_win and self.my_tank:
+                        self._last_level_kills = self.my_tank.kills
+
+                self.render()
+                if nv.game_win:
+                    self._render_transition_kills()
+                pygame.display.update()
+
+                if pygame.time.get_ticks() - self._transition_timer > self.TRANSITION_DELAY:
+                    if nv.game_win:
+                        next_level = nv.current_level + 1
+                        if self.level_exists(next_level):
+                            self._reset_and_load_level(next_level)
+                            self._transition_timer = 0
+                            continue
+                    # 全部通关或失败，返回主菜单
+                    else:
+                        # 将窗口恢复为原始大小
+                        pygame.display.set_mode((cfg.WIDTH, cfg.HEIGHT))
+                        return
+                #过渡中
+                continue
+
+            #主游戏逻辑
             self.update()
             self.render()
 
@@ -727,30 +756,32 @@ class MainGame:
         self.scenes_event.render_ices()
 
         self.tanks_event.render()
-        self.collision_event.render()
         self.bullet_event.render()
-
 
         # 渲染 home
         if nv.home:
             nv.home.display_static_entity(nv.window)
 
-        # Render trees on top of everything for concealment effect
         self.scenes_event.render_trees()
 
+        self.collision_event.render()
         # 游戏结果渲染在所有图层之上
         self.game_result_event.render_game_result()
 
+        self.render_panel()
+
+    def menu(self):
+        # 显示右侧信息面板
+        self.panel_x = cfg.WIDTH + 10
+
+    def render_panel(self):
+        """渲染信息面板"""
         enemy_text = self.get_text_surface(f"敌人: {self.normal_variables.remaining_enemies}", 20)
         self.window.blit(enemy_text, (self.panel_x, 10))
 
         if self.my_tank:
             hp_text = self.get_text_surface(f"血量: {self.my_tank.hp}", 20)
             self.window.blit(hp_text, (self.panel_x, 50))
-
-    def menu(self):
-        # 显示右侧信息面板
-        self.panel_x = cfg.WIDTH + 10
 
     def get_text_surface(self, text, size=25):
 
@@ -793,8 +824,66 @@ class MainGame:
         pygame.quit()
         exit()
 
+    @staticmethod
+    def level_exists(level):
+        """检查关卡文件是否存在"""
+        path = os.path.join(cfg.LEVELFILEDIR, f'{level}.lvl')
+        return os.path.exists(path)
+
+    def _reset_and_load_level(self, level):
+        """重置游戏状态并加载新关卡"""
+
+        # 清空所有精灵组
+        MainGame.walls.empty()
+        MainGame.enemy_tanks.empty()
+        MainGame.all_collision.empty()
+        MainGame.my_bullets.empty()
+        MainGame.enemy_bullets.empty()
+        MainGame.explosions.empty()
+        MainGame.rivers.empty()
+        MainGame.trees.empty()
+        MainGame.ices.empty()
+
+        nv = self.normal_variables
+        nv.game_win = False
+        nv.game_lose = False
+        nv.key_order = []
+        nv.keys_pressed = None
+        nv.home = None
+        nv.total_created_enemy_tanks = 0
+
+        # 加载新关卡
+        self.load_lvl(str(level))
+
+        # 重建坦克（保留累计击杀数由_tanks_event管理）
+        self.tanks_event.allocated_tank_id = 0
+        self.tanks_event.allocated_bullet_id = 0
+        self.tanks_event.tank_creation()
+        if self.my_tank:
+            self.my_tank.kills = 0  # 每关击杀数清零
+
+        # 重建事件处理器
+        self.game_result_event = GameResultEvent(nv, self.my_tank, self.enemy_tanks)
+        self.collision_event = CollisionEvent(
+            self.my_tank, self.enemy_tanks, self.my_bullets, self.enemy_bullets,
+            self.walls, self.rivers, self.explosions, nv, home=nv.home
+        )
+        self.bullet_event = BulletsEvent(self.my_bullets, self.enemy_bullets, nv)
+
+    def _render_transition_kills(self):
+        """在关卡切换时渲染击杀统计"""
+        nv = self.normal_variables
+        my_font = pygame.font.Font(cfg.FONTPATH, 36)
+        kills = self._last_level_kills
+        kills_text = my_font.render(f'击杀: {kills}', True, pygame.Color(255, 255, 0))
+        text_x = nv.window_size[0] / 2 - kills_text.get_width() / 2
+        text_y = nv.window_size[1] / 2 + 40
+        nv.window.blit(kills_text, (text_x, text_y))
+
 
 class MultiplayerGame:
+    TRANSITION_DELAY = 3000  # 关卡切换显示时间（毫秒）
+
     def __init__(self, host_network=None, host_ip=None):
         #主机则传入network对象并依据此判断标记
         self._host_network = host_network
@@ -817,18 +906,24 @@ class MultiplayerGame:
         self._render_tanks = pygame.sprite.Group()
         self._render_bullets = pygame.sprite.Group()
         self._render_walls = pygame.sprite.Group()
+        self._render_ices = pygame.sprite.Group()
+        self._render_trees = pygame.sprite.Group()
         self._render_explosions = pygame.sprite.Group()
+        self._client_home = None
 
         # 关卡数据（Client端从Host接收）
         self._level_config = None
         self._walls_data = None
         self._game_started = False
 
-        # 帧计数
-        self._frame_counter = 0
-
         # 主机端使用的MainGame实例
         self._main_game = None
+
+        # 关卡切换相关
+        self._transition_timer = 0
+        self._last_p1_kills = 0
+        self._last_p2_kills = 0
+        self._game_over_sent = False
 
     def start_game(self, level='1', is_host=True):
         if is_host:
@@ -910,12 +1005,49 @@ class MultiplayerGame:
 
         # 主游戏循环
         self._running = True
+        self._transition_timer = 0
         while self._running:
             MainGame.clock.tick(cfg.INITIAL_TICK)
-            #暂未使用帧计数
-            self._frame_counter += 1
 
             self._get_host_events()
+
+            nv = self.nv
+
+            # 处理关卡胜利/失败过渡
+            if nv.game_win or nv.game_lose:
+                if self._transition_timer == 0:
+                    self._transition_timer = pygame.time.get_ticks()
+                    # 保存击杀数用于过渡显示
+                    if nv.game_win:
+                        self._last_p1_kills = self._my_tank.kills if self._my_tank else 0
+                        self._last_p2_kills = self._teammate_tank.kills if self._teammate_tank else 0
+
+                self._render_host()
+                if nv.game_win:
+                    self._render_multiplayer_transition_kills()
+
+                # 网络更新
+                self._host_network.update()
+                # 同步状态到客户端
+                self._sync_to_client()
+                pygame.display.update()
+ 
+                if pygame.time.get_ticks() - self._transition_timer > self.TRANSITION_DELAY:
+                    if nv.game_win:
+                        next_level = nv.current_level + 1
+                        if MainGame.level_exists(next_level):
+                            self._reset_host_level(next_level)
+                            self._transition_timer = 0
+                            self._game_over_sent = False
+                            continue
+                    # 全部通关或失败，退出
+                    else:
+                        # 将窗口恢复为原始大小
+                        pygame.display.set_mode((cfg.WIDTH, cfg.HEIGHT))
+                        self._running = False
+                continue
+
+
             self._update_host()
             self._render_host()
 
@@ -989,7 +1121,9 @@ class MultiplayerGame:
                 for row_i, elem in enumerate(line.split(' ')):
                     pos = (row_i * nv.cell_len, num_row * nv.cell_len)
                     self._scenes_event.scenes_creation(elem, pos)
-                    walls_list.append({'type': elem, 'x': pos[0], 'y': pos[1]})
+                    # 捕获Host端分配的场景ID，确保Client端ID一致
+                    scene_id = self._scenes_event.allocated_scenes_id - 1
+                    walls_list.append({'type': elem, 'x': pos[0], 'y': pos[1], 'id': scene_id})
                 num_row += 1
 
         self._level_config = config
@@ -1019,6 +1153,7 @@ class MultiplayerGame:
             'window_size': self.nv.window_size,
             'total_enemy_num': self.nv.total_enemy_tanks,
             'remaining_enemies': self.nv.remaining_enemies,
+            'home_pos': self._level_config.get('home_pos'),
         }
         self._host_network.send_level_data(level_config_for_client, self._walls_data)
         # 等待一小段时间确保客户端收到
@@ -1116,7 +1251,7 @@ class MultiplayerGame:
         old_rect = self._teammate_tank.rect.copy()
         old_direction = self._teammate_tank.direction
 
-        self._tanks_event._apply_ice_effect(self._teammate_tank)
+        self._tanks_event.apply_ice_effect(self._teammate_tank)
 
         self._teammate_tank.move(direction)
 
@@ -1166,6 +1301,9 @@ class MultiplayerGame:
         # 渲染 home
         if self.nv.home:
             self.nv.home.display_static_entity(self._window)
+
+        # 渲染树木（最顶层，用于隐蔽效果）
+        self._scenes_event.render_trees()
 
         # 检查游戏是否结束，通知客户端（只发送一次）
         #_game_over_sent仅仅使用一次
@@ -1222,10 +1360,16 @@ class MultiplayerGame:
         # 收集墙体数据
         for wall in MainGame.walls:
             snapshot.walls.append(NetworkMessage.wall_to_data(wall))
+        for river in MainGame.rivers:
+            snapshot.walls.append(NetworkMessage.wall_to_data(river))
 
         # 收集爆炸数据
         for explosion in MainGame.explosions:
             snapshot.explosions.append(NetworkMessage.explosion_to_data(explosion))
+
+        # home 数据
+        if self.nv.home:
+            snapshot.home = NetworkMessage.home_to_data(self.nv.home)
 
         # 游戏信息
         snapshot.game_info = NetworkMessage.game_info_to_data(
@@ -1235,6 +1379,92 @@ class MultiplayerGame:
         self._host_network.send_state(snapshot)
 
     # ==================== Client端 ====================
+
+    def _reset_host_level(self, level):
+        """Host端重置游戏状态并加载新关卡，同步到客户端"""
+        nv = self.nv
+        # 保存击杀数（用于过渡显示）
+        self._last_p1_kills = self._my_tank.kills if self._my_tank else 0
+        self._last_p2_kills = self._teammate_tank.kills if self._teammate_tank else 0
+
+        # 清空所有精灵组
+        MainGame.walls.empty()
+        MainGame.enemy_tanks.empty()
+        MainGame.all_collision.empty()
+        MainGame.my_bullets.empty()
+        MainGame.enemy_bullets.empty()
+        MainGame.explosions.empty()
+        MainGame.rivers.empty()
+        MainGame.trees.empty()
+        MainGame.ices.empty()
+
+        nv.game_win = False
+        nv.game_lose = False
+        nv.key_order = []
+        nv.keys_pressed = None
+        nv.home = None
+        nv.total_created_enemy_tanks = 0
+
+        # 重建ScenesEvent（关键：让墙体ID从0重新开始，与Client端匹配）
+        self._scenes_event = ScenesEvent(
+            MainGame.all_collision, MainGame.walls,
+            MainGame.rivers, MainGame.trees, MainGame.ices, nv
+        )
+
+        # 加载新关卡
+        self._load_level_for_host(level)
+
+        # 重建坦克
+        player_pos = nv.initial_reborn_position
+        teammate_pos = nv.teammate_reborn_position
+
+        self._create_host_tank(player_pos)
+        self._my_tank.kills = 0
+
+        self._create_teammate_tank(teammate_pos)
+        self._teammate_tank.kills = 0
+
+        # 重建TanksEvent
+        self._tanks_event = TanksEvent(
+            self._my_tank, MainGame.enemy_tanks,
+            MainGame.my_bullets, MainGame.enemy_bullets,
+            MainGame.walls, MainGame.all_collision, MainGame.ices, nv
+        )
+        self._tanks_event.allocated_tank_id = 2
+        self._tanks_event.allocated_bullet_id = 0
+
+        # 重建事件处理器
+        self._game_result_event = GameResultEvent(
+            nv, self._my_tank, MainGame.enemy_tanks,
+            teammate_tank=self._teammate_tank
+        )
+        self._collision_event = CollisionEvent(
+            self._my_tank, MainGame.enemy_tanks,
+            MainGame.my_bullets, MainGame.enemy_bullets,
+            MainGame.walls, MainGame.rivers, MainGame.explosions, nv,
+            teammate_tank=self._teammate_tank,
+            home=nv.home
+        )
+        self._bullet_event = BulletsEvent(
+            MainGame.my_bullets, MainGame.enemy_bullets, nv
+        )
+
+        # 同步新关卡数据到客户端
+        self._send_level_data_to_client()
+        self._host_network.send_game_start()
+
+    def _render_multiplayer_transition_kills(self):
+        """在联机关卡切换时渲染双方击杀统计"""
+        nv = self.nv
+        my_font = pygame.font.Font(cfg.FONTPATH, 36)
+        p1_text = my_font.render(f'P1击杀: {self._last_p1_kills}', True, pygame.Color(255, 255, 0))
+        p2_text = my_font.render(f'P2击杀: {self._last_p2_kills}', True, pygame.Color(0, 255, 0))
+        text_x = nv.window_size[0] / 2 - p1_text.get_width() / 2
+        text_y = nv.window_size[1] / 2 + 40
+        nv.window.blit(p1_text, (text_x, text_y))
+        p2_x = nv.window_size[0] / 2 - p2_text.get_width() / 2
+        p2_y = text_y + 45
+        nv.window.blit(p2_text, (p2_x, p2_y))
 
     def _start_as_client(self):
         # 初始化窗口
@@ -1274,11 +1504,11 @@ class MultiplayerGame:
         self._panel_x = cfg.WIDTH + 10
         self._running = True
         SoundManager.play_start()
+        self._transition_timer = 0
 
         # Client主循环
         while self._running:
             self._clock.tick(cfg.INITIAL_TICK)
-            self._frame_counter += 1
 
             self._get_client_events()
             self._client_network.update()
@@ -1288,14 +1518,52 @@ class MultiplayerGame:
                 self._running = False
                 break
 
-            # 处理接收到的状态
+            # 处理关卡切换
+            if self._client_network.pending_level_reset:
+                print("[Client] 收到新关卡数据，重置场景...")
+                self._level_config = self._client_network.level_config
+                self._walls_data = self._client_network.walls_data
+                self._render_tanks.empty()
+                self._render_bullets.empty()
+                self._render_ices.empty()
+                self._render_trees.empty()
+                self._render_explosions.empty()
+                self._create_walls_from_data()
+                self._game_started = False
+                self._snapshot_game_info = {}
+                self._transition_timer = 0
+                # 跳过本帧的状态处理，等待下一帧Host的新快照
+                self._render_client()
+                pygame.display.update()
+                continue
+
+            # 处理接收到的状态（每帧都处理，包括过渡期间）
             self._process_received_state()
 
-            # 渲染
-            self._render_client()
+            # 检查游戏胜负并处理过渡
+            game_info = getattr(self, '_snapshot_game_info', {})
+            if game_info.get('game_win') or game_info.get('game_lose'):
+                if self._transition_timer == 0:
+                    self._transition_timer = pygame.time.get_ticks()
 
-            pygame.display.update()
+                print(self._client_home)
 
+                self._render_client()
+                if game_info.get('game_win'):
+                    self._render_client_transition_kills(game_info)
+                pygame.display.update()
+
+                elapsed = pygame.time.get_ticks() - self._transition_timer
+                if elapsed > self.TRANSITION_DELAY:
+                    # Host会发送新关卡数据，等待接收
+                    self._transition_timer = 0
+            else:
+                # 正常渲染
+                self._render_client()
+                pygame.display.update()
+
+        # 将窗口恢复为原始大小
+        pygame.display.set_mode((cfg.WIDTH, cfg.HEIGHT))
         self._client_network.close()
 
     def _wait_for_level_data(self, timeout=30.0):
@@ -1334,17 +1602,35 @@ class MultiplayerGame:
         if not self._walls_data:
             return
 
-        wall_id = 0
-        for wall in self._walls_data:
-            pos = (wall['x'], wall['y'])
-            if wall['type'] == 'B':
+        for wall_data in self._walls_data:
+            wall_type = wall_data['type']
+            pos = (wall_data['x'], wall_data['y'])
+            wall_id = wall_data.get('id', 0)  # 使用Host端分配的场景ID
+
+            if wall_type == 'B':
                 wall = BrickWall(pos, wall_id)
                 self._render_walls.add(wall)
-                wall_id += 1
-            elif wall['type'] == 'I':
+            elif wall_type == 'I':
                 wall = SteelWall(pos, wall_id)
                 self._render_walls.add(wall)
-                wall_id += 1
+            elif wall_type == 'R':
+                wall = River(pos, wall_id, river_variant=wall_id % 2)
+                self._render_walls.add(wall)
+            elif wall_type == 'C':
+                wall = Ice(pos, wall_id)
+                self._render_ices.add(wall)
+            elif wall_type == 'T':
+                wall = Tree(pos, wall_id)
+                self._render_trees.add(wall)
+
+        # 创建 Home
+        if self._level_config and self._level_config.get('home_pos'):
+            home_pos = self._level_config['home_pos']
+            cell_len = self._level_config.get('cell_len', 24)
+            pixel_pos = (home_pos[0] * cell_len, home_pos[1] * cell_len)
+            self._client_home = Home(pixel_pos)
+        else:
+            self._client_home = None
 
     def _get_client_events(self):
         event_list = pygame.event.get()
@@ -1409,7 +1695,7 @@ class MultiplayerGame:
         # 更新墙体（只在初始加载时创建，后续只更新状态）
         if snapshot.walls:
             wall_dict = {wd['id']: wd for wd in snapshot.walls}
-            for wall in self._render_walls:
+            for wall in list(self._render_walls):
                 wd = wall_dict.get(wall.id)
                 if wd:
                     wall.hp = wd.get('hp', 1)
@@ -1417,8 +1703,24 @@ class MultiplayerGame:
                     if not wall.live:
                         wall.kill()
                 else:
-
                     wall.kill()
+
+            # 创建快照中有但本地缺失的新墙体
+            existing_ids = {w.id for w in self._render_walls}
+            for wd in snapshot.walls:
+                wall_id = wd['id']
+                if wall_id not in existing_ids:
+                    wall_type = wd.get('wall_type', 'brick')
+                    pos = (wd['x'], wd['y'])
+                    if wall_type == 'steel':
+                        wall = SteelWall(pos, wall_id)
+                    else:
+                        wall = BrickWall(pos, wall_id)
+                    wall.hp = wd.get('hp', 1)
+                    wall.live = wd.get('live', True)
+                    if not wall.live:
+                        wall.kill()
+                    self._render_walls.add(wall)
 
 
         # 更新爆炸
@@ -1435,6 +1737,16 @@ class MultiplayerGame:
             if exp.step < len(exp.images):
                 exp.image = exp.images[exp.step]
             self._render_explosions.add(exp)
+
+        # 更新 home 状态
+
+        home_data = snapshot.home
+        print("home_data:", home_data)
+        if home_data and self._client_home:
+            self._client_home.live = home_data.get('live', True)
+            self._client_home.destroyed = home_data.get('destroyed', False)
+            if not self._client_home.live or self._client_home.destroyed:
+                self._client_home.image = OtherImageCache.get_home_image('destroyed')
 
         # 检查游戏结束
         game_info = snapshot.game_info or {}
@@ -1455,6 +1767,10 @@ class MultiplayerGame:
             if wall.live:
                 wall.display_static_entity(self._window)
 
+        # 冰场景渲染在坦克下面
+        for ice in self._render_ices:
+            ice.display_static_entity(self._window)
+
         # 渲染坦克
         for tank in self._render_tanks:
             tank.display_tank()
@@ -1463,11 +1779,20 @@ class MultiplayerGame:
         for bullet in self._render_bullets:
             bullet.display_bullet(self._window)
 
+
+
+        # 渲染 home
+        if self._client_home:
+            self._client_home.display_static_entity(self._window)
+
+        # 渲染树木（最顶层，用于隐蔽效果）
+        for tree in self._render_trees:
+            tree.display_static_entity(self._window)
+
         # 渲染爆炸
         for explosion in self._render_explosions:
             if explosion.live:
                 explosion.display_explode(self._window)
-
         # 信息面板
         game_info = getattr(self, '_snapshot_game_info', {})
         font = pygame.font.Font(cfg.FONTPATH, 20)
@@ -1501,6 +1826,20 @@ class MultiplayerGame:
                 cfg.WIDTH / 2 - game_over_image.get_width() / 2,
                 cfg.HEIGHT / 2 - game_over_image.get_height() / 2
             ))
+
+    def _render_client_transition_kills(self, game_info):
+        """Client端渲染关卡切换时的击杀统计"""
+        my_font = pygame.font.Font(cfg.FONTPATH, 36)
+        p1_kills = game_info.get('player1_kills', 0)
+        p2_kills = game_info.get('player2_kills', 0)
+        p1_text = my_font.render(f'P1击杀: {p1_kills}', True, pygame.Color(255, 255, 0))
+        p2_text = my_font.render(f'P2击杀: {p2_kills}', True, pygame.Color(0, 255, 0))
+        text_x = cfg.WIDTH / 2 - p1_text.get_width() / 2
+        text_y = cfg.HEIGHT / 2 + 40
+        self._window.blit(p1_text, (text_x, text_y))
+        p2_x = cfg.WIDTH / 2 - p2_text.get_width() / 2
+        p2_y = text_y + 45
+        self._window.blit(p2_text, (p2_x, p2_y))
 
     def get_text_surface(self, text, size=25):
         my_font = pygame.font.Font(cfg.FONTPATH, size)
