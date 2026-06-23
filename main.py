@@ -3,6 +3,7 @@ import threading
 
 
 def _suppress_libpng_warnings():
+    """屏蔽libpng的stderr警告输出"""
     r_fd, w_fd = os.pipe()
     original_fd = os.dup(2)
     os.dup2(w_fd, 2)
@@ -26,14 +27,15 @@ def _suppress_libpng_warnings():
 
 _suppress_libpng_warnings()
 
-
-# Import after libpng warning suppression (must be after stderr redirect)
-from modules.LoginMenu import LoginMenu  # noqa: E402
-from modules.MainMenu import MainMenu  # noqa: E402
+from modules.LoginMenu import LoginMenu
+from modules.MainMenu import MainMenu
 
 
 if __name__ == '__main__':
-    login_menu = LoginMenu()
-    username = login_menu.run()
-    if username:
-        MainMenu(username).run()
+    try:
+        login_menu = LoginMenu()
+        username = login_menu.run()
+        if username:
+            MainMenu(username).run()
+    except Exception as e:
+        print(f"[错误] 游戏运行时发生异常: {e}")

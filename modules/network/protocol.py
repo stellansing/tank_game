@@ -6,6 +6,7 @@ from typing import Optional
 
 
 class MessageType(str, Enum):
+    """网络消息类型枚举"""
     # 连接握手
     CONNECT = "connect"
     CONNECT_ACK = "connect_ack"
@@ -21,6 +22,7 @@ class MessageType(str, Enum):
 
 @dataclass
 class TankData:
+    """坦克网络传输数据结构"""
     id: int
     x: int
     y: int
@@ -33,6 +35,7 @@ class TankData:
 
 @dataclass
 class BulletData:
+    """子弹网络传输数据结构"""
     id: int
     x: int
     y: int
@@ -71,6 +74,7 @@ class ExplosionData:
 
 @dataclass
 class GameInfo:
+    """游戏状态信息（关卡、胜负、击杀数等）"""
     remaining_enemies: int
     player1_hp: int = 3
     player2_hp: int = 3
@@ -84,12 +88,14 @@ class GameInfo:
 
 @dataclass
 class InputData:
+    """客户端输入数据（按键操作）"""
     key_order: list = field(default_factory=list)
     space_pressed: bool = False
 
 
 @dataclass
 class GameStateSnapshot:
+    """游戏全量状态快照，用于Host->Client同步"""
     tanks: list = field(default_factory=list)
     bullets: list = field(default_factory=list)
     walls: list = field(default_factory=list)
@@ -99,6 +105,7 @@ class GameStateSnapshot:
 
 
 class NetworkMessage:
+    """消息编解码工具，负责网络数据的序列化与反序列化"""
 
     ENCODING = 'utf-8'
 

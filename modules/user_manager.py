@@ -31,9 +31,12 @@ class UserManager:
     @classmethod
     def _save_users(cls, users):
         """保存用户数据"""
-        cls._ensure_data_dir()
-        with open(cls.USERS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(users, f, ensure_ascii=False, indent=2)
+        try:
+            cls._ensure_data_dir()
+            with open(cls.USERS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(users, f, ensure_ascii=False, indent=2)
+        except (OSError, PermissionError) as e:
+            print(f"[警告] 保存用户数据失败: {e}")
 
     @classmethod
     def login(cls, username, password):
@@ -75,9 +78,12 @@ class UserManager:
     @classmethod
     def _save_records(cls, records):
         """保存游戏记录"""
-        cls._ensure_data_dir()
-        with open(cls.RECORDS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(records, f, ensure_ascii=False, indent=2)
+        try:
+            cls._ensure_data_dir()
+            with open(cls.RECORDS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(records, f, ensure_ascii=False, indent=2)
+        except (OSError, PermissionError) as e:
+            print(f"[警告] 保存游戏记录失败: {e}")
 
     @classmethod
     def save_game_record(cls, username, level, is_win, kills, is_multiplayer=False, teammate=None):

@@ -7,6 +7,7 @@ import random
 
 
 class Tank(Sprite):
+    """坦克基类，提供移动、射击、动画等通用功能"""
 
     def __init__(self, position, window, game_window_size: tuple,
                  tank_id) -> None:
@@ -47,17 +48,23 @@ class Tank(Sprite):
         self.kills = 0
 
     def display_tank(self):
-        self.image = self.images[self.direction]
-        self.owner_window.blit(self.image, self.rect)
+        """在窗口中渲染坦克"""
+        if self.images and self.direction in self.images:
+            self.image = self.images[self.direction]
+            if self.image:
+                self.owner_window.blit(self.image, self.rect)
 
     def update_animation(self):
+        """更新坦克动画帧"""
         if self.tank_animation_time_computer.set_interval():
             self.current_frame = 1 - self.current_frame
 
     def change_direction(self, direction):
+        """改变坦克方向（保留当前帧编号）"""
         self.direction = str(direction) + self.direction[1]
 
     def move(self, direction):
+        """按指定方向移动坦克"""
         if direction == 'L':
             if self.rect.left > 0:
                 self.rect = self.rect.move(-self.speed, 0)
@@ -75,6 +82,7 @@ class Tank(Sprite):
         self.update_animation()
 
     def shot(self, bullet_id):
+        """发射子弹，返回Bullet实例；cd中则返回None"""
         if not self.bullet_live and self.shot_time_computer.set_interval():
             bullet = Bullet(self, bullet_id)
             self.bullet_live = True
@@ -83,18 +91,20 @@ class Tank(Sprite):
 
 
 class MyTank(Tank):
+    """玩家坦克类"""
     def __init__(self, position, window, game_window_size: tuple,
                  tank_id, player_key='player1'):
         super().__init__(position, window, game_window_size, tank_id)
         self.player_key = player_key
         self.images = TankImageCache.get_player_tank_image(self.player_key, 0)
         self.direction = 'U1'
-        self.image = self.images[self.direction]
-        self.rect = self.image.get_rect()
+        self.image = self.images[self.direction] if self.images and self.direction in self.images else None
+        self.rect = self.image.get_rect() if self.image else pygame.Rect(position[0], position[1], 0, 0)
         self.rect.left, self.rect.top = position
 
 
 class EnemyTank(Tank):
+    """敌方坦克类，具备随机移动逻辑"""
     def __init__(self, position, window, game_window_size: tuple,
                  tank_id):
         super().__init__(position, window, game_window_size, tank_id)
@@ -102,8 +112,8 @@ class EnemyTank(Tank):
         self.enemy_type = '1'
         self.images = TankImageCache.get_enemy_tank_image(self.enemy_type, 0)
         self.direction = self.rand_direction() + '1'
-        self.image = self.images[self.direction]
-        self.rect = self.image.get_rect()
+        self.image = self.images[self.direction] if self.images and self.direction in self.images else None
+        self.rect = self.image.get_rect() if self.image else pygame.Rect(position[0], position[1], 0, 0)
         self.rect.left, self.rect.top = position
 
         self.hp = 1
@@ -111,6 +121,7 @@ class EnemyTank(Tank):
         self.last_position = self.rect.topleft
 
     def rand_direction(self) -> str:
+        """随机返回一个方向字符(L/R/U/D)"""
         choice = random.randint(1, 4)
         rand_direction = None
         if choice == 1:
@@ -124,7 +135,7 @@ class EnemyTank(Tank):
         return rand_direction
 
     def rand_move(self):
-
+        """敌方坦克随机移动逻辑：卡住时改变方向"""
         if self.rect.topleft != self.last_position:
             self.last_position = self.rect.topleft
         else:

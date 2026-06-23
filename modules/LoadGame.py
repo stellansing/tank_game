@@ -17,6 +17,8 @@ import cfg
 
 
 class NormalVariables:
+    """游戏运行时的全局变量容器"""
+
     def __init__(self):
         self.teammate_reborn_position = None
         self.total_enemy_tanks = 0
@@ -48,6 +50,7 @@ class NormalVariables:
 
 
 class TanksEvent:
+    """坦克事件管理器，处理坦克的创建、移动和射击"""
     def __init__(self, my_tank, enemy_tanks, my_bullets,
                  enemy_bullets, walls, all_collision, ices,
                  normal_variables):
@@ -67,6 +70,7 @@ class TanksEvent:
         self.allocated_bullet_id = 0
 
     def tanks_update(self):
+        """更新所有坦克状态"""
         self.random_create_enemy_tanks()
         self.tanks_move()
         self.tanks_shot()
@@ -83,6 +87,7 @@ class TanksEvent:
             tank.display_tank()
 
     def tank_creation(self):
+        """创建玩家坦克"""
         self.create_my_tank()
         self.allocated_tank_id += 1
 
@@ -223,6 +228,7 @@ class TanksEvent:
 
 
 class BulletsEvent:
+    """子弹事件管理器，处理子弹的移动和渲染"""
     def __init__(self, my_bullets, enemy_bullets,
                  normal_variables):
         self.normal_variables = normal_variables
@@ -230,6 +236,7 @@ class BulletsEvent:
         self.enemy_bullets = enemy_bullets
 
     def bullets_update(self):
+        """更新所有子弹状态"""
         self.bullets_move()
 
     def render(self):
@@ -246,6 +253,7 @@ class BulletsEvent:
 
 
 class ScenesEvent:
+    """场景事件管理器，处理地图元素的创建和渲染"""
     def __init__(self, all_collision, walls, rivers, trees, ices,
                  normal_variables):
         self.normal_variables = normal_variables
@@ -330,6 +338,7 @@ class ScenesEvent:
 
 
 class CollisionEvent:
+    """碰撞事件管理器，处理子弹与坦克、墙壁等的碰撞逻辑"""
     def __init__(self, my_tank, enemy_tanks, my_bullets,
                  enemy_bullets, walls, rivers, explosions,
                  normal_variables, teammate_tank=None, home=None):
@@ -350,6 +359,7 @@ class CollisionEvent:
         self._explosion_id_counter = 0
 
     def collision_update(self):
+        """更新所有碰撞检测"""
         self.tank_bullet_collision()
         self.bullet_wall_collision()
         self.bullet_home_collision()
@@ -497,6 +507,7 @@ class CollisionEvent:
 
 
 class GameResultEvent:
+    """游戏结果判定管理器"""
     def __init__(self, normal_variables, my_tank, enemy_tanks,
                  teammate_tank=None):
         self.normal_variables = normal_variables
@@ -505,6 +516,7 @@ class GameResultEvent:
         self.enemy_tanks = enemy_tanks
 
     def game_result_update(self):
+        """更新游戏胜负判定"""
         self.game_win_check()
         self.game_lose_check()
         self.game_result_check()
@@ -533,22 +545,29 @@ class GameResultEvent:
     def game_result_check(self):
         nv = self.normal_variables
         if nv.game_win:
-            my_font = pygame.font.Font(cfg.FONT_PATH, 50)
-            win_text = my_font.render('You Win', True, pygame.Color(255, 0, 0))
-            nv.window.blit(win_text, (nv.window_size[0] / 2 - win_text.get_width() / 2, nv.window_size[1] / 2 - win_text.get_height() / 2))
+            try:
+                my_font = pygame.font.Font(cfg.FONT_PATH, 50)
+                win_text = my_font.render('You Win', True, pygame.Color(255, 0, 0))
+                nv.window.blit(win_text, (nv.window_size[0] / 2 - win_text.get_width() / 2, nv.window_size[1] / 2 - win_text.get_height() / 2))
+            except (pygame.error, FileNotFoundError) as e:
+                print(f"[警告] 渲染胜利文字失败: {e}")
             return True
         elif nv.game_lose:
-            # 加载失败图片
-            game_over_image = OtherImageCache.get_other_image('gameover')
-            logo_width = 300
-            logo_height = int(game_over_image.get_height() * (logo_width / game_over_image.get_width()))
-            game_over_image = pygame.transform.scale(game_over_image, (logo_width, logo_height))
-            nv.window.blit(game_over_image, (nv.window_size[0] / 2 - game_over_image.get_width() / 2, nv.window_size[1] / 2 - game_over_image.get_height() / 2))
+            try:
+                game_over_image = OtherImageCache.get_other_image('gameover')
+                if game_over_image:
+                    logo_width = 300
+                    logo_height = int(game_over_image.get_height() * (logo_width / game_over_image.get_width()))
+                    game_over_image = pygame.transform.scale(game_over_image, (logo_width, logo_height))
+                    nv.window.blit(game_over_image, (nv.window_size[0] / 2 - game_over_image.get_width() / 2, nv.window_size[1] / 2 - game_over_image.get_height() / 2))
+            except (pygame.error, AttributeError) as e:
+                print(f"[警告] 渲染失败图片失败: {e}")
             return True
         return False
 
 
 class MainGame:
+    """单人游戏主引擎，负责游戏循环、事件处理和渲染"""
     window = None
 
     my_tank = None
@@ -691,9 +710,6 @@ class MainGame:
             print(f"关卡文件不存在: {path}，使用默认关卡1")
             path = cfg.LEVEL_FILE_DIR + '/1.lvl'
 
-        with open(path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-
         # 清除现有对象（重新加载关卡时）
         MainGame.walls.empty()
         MainGame.enemy_tanks.empty()
@@ -706,42 +722,53 @@ class MainGame:
         config = {}
         num_row = 0
 
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+        except (OSError, FileNotFoundError) as e:
+            print(f"[警告] 读取关卡文件失败: {path} - {e}")
+            lines = []
+
         for i, line in enumerate(lines):
             line = line.strip()
 
-            if line.startswith('%TOTALENEMYNUM:'):
-                config['total_enemy_num'] = int(line.split(':')[1])
-            elif line.startswith('%MAXENEMYNUM:'):
-                config['max_enemy_num'] = int(line.split(':')[1])
-            elif line.startswith('%HOMEPOS:'):
-                pos_str = line.split(':')[1]
-                x, y = map(int, pos_str.split(','))
-                config['home_pos'] = (x, y)
-            elif line.startswith('%HOMEAROUNDPOS:'):
-                pos_str = line.split(':')[1]
-                positions = []
-                for pos in pos_str.split():
-                    x, y = map(int, pos.split(','))
-                    positions.append((x, y))
-                config['home_around_pos'] = positions
-            elif line.startswith('%PLAYERTANKPOS:'):
-                pos_str = line.split(':')[1]
-                positions = []
-                for pos in pos_str.split():
-                    x, y = map(int, pos.split(','))
-                    positions.append((x, y))
-                config['player_tank_pos'] = positions
-            elif line.startswith('%ENEMYTANKPOS:'):
-                pos_str = line.split(':')[1]
-                positions = []
-                for pos in pos_str.split():
-                    x, y = map(int, pos.split(','))
-                    positions.append((x * self.normal_variables.cell_len, y * self.normal_variables.cell_len))
-                config['enemy_tank_pos'] = positions
-            elif line and not line.startswith('#') and not line.startswith('%'):
-                for row_i, elem in enumerate(line.split(' ')):
-                    self.scenes_event.scenes_creation(elem, (row_i * self.normal_variables.cell_len, num_row * self.normal_variables.cell_len))
-                num_row += 1
+            try:
+                if line.startswith('%TOTALENEMYNUM:'):
+                    config['total_enemy_num'] = int(line.split(':')[1])
+                elif line.startswith('%MAXENEMYNUM:'):
+                    config['max_enemy_num'] = int(line.split(':')[1])
+                elif line.startswith('%HOMEPOS:'):
+                    pos_str = line.split(':')[1]
+                    x, y = map(int, pos_str.split(','))
+                    config['home_pos'] = (x, y)
+                elif line.startswith('%HOMEAROUNDPOS:'):
+                    pos_str = line.split(':')[1]
+                    positions = []
+                    for pos in pos_str.split():
+                        x, y = map(int, pos.split(','))
+                        positions.append((x, y))
+                    config['home_around_pos'] = positions
+                elif line.startswith('%PLAYERTANKPOS:'):
+                    pos_str = line.split(':')[1]
+                    positions = []
+                    for pos in pos_str.split():
+                        x, y = map(int, pos.split(','))
+                        positions.append((x, y))
+                    config['player_tank_pos'] = positions
+                elif line.startswith('%ENEMYTANKPOS:'):
+                    pos_str = line.split(':')[1]
+                    positions = []
+                    for pos in pos_str.split():
+                        x, y = map(int, pos.split(','))
+                        positions.append((x * self.normal_variables.cell_len, y * self.normal_variables.cell_len))
+                    config['enemy_tank_pos'] = positions
+                elif line and not line.startswith('#') and not line.startswith('%'):
+                    for row_i, elem in enumerate(line.split(' ')):
+                        self.scenes_event.scenes_creation(elem, (row_i * self.normal_variables.cell_len, num_row * self.normal_variables.cell_len))
+                    num_row += 1
+            except (ValueError, IndexError) as e:
+                print(f"[警告] 解析关卡配置行失败: '{line}' - {e}")
+                continue
 
         # 创建 home
         home_pos = config.get('home_pos')
@@ -767,7 +794,7 @@ class MainGame:
         nv.enemy_tanks_positions = config.get('enemy_tank_pos', [(0, 0), (288, 0), (576, 0)])
 
     def update(self):
-
+        """更新所有游戏逻辑（坦克、子弹、碰撞）"""
         self.tanks_event.tanks_update()
         self.bullet_event.bullets_update()
         self.collision_event.collision_update()
@@ -781,8 +808,12 @@ class MainGame:
 
         self.window.fill((0, 0, 0))
         # 加载并显示背景图片
-        background_image = OtherImageCache.get_other_image('background')
-        self.window.blit(background_image, (0, 0))
+        try:
+            background_image = OtherImageCache.get_other_image('background')
+            if background_image:
+                self.window.blit(background_image, (0, 0))
+        except (pygame.error, AttributeError) as e:
+            print(f"[警告] 渲染背景图片失败: {e}")
 
         # 先检查游戏状态（不渲染）
         self.game_result_event.check_game_state()
@@ -814,19 +845,26 @@ class MainGame:
     def render_panel(self):
         """渲染信息面板"""
         enemy_text = self.get_text_surface(f"敌人: {self.normal_variables.remaining_enemies}", 20)
-        self.window.blit(enemy_text, (self.panel_x, 10))
+        if enemy_text:
+            self.window.blit(enemy_text, (self.panel_x, 10))
 
         if self.my_tank:
             hp_text = self.get_text_surface(f"血量: {self.my_tank.hp}", 20)
-            self.window.blit(hp_text, (self.panel_x, 50))
+            if hp_text:
+                self.window.blit(hp_text, (self.panel_x, 50))
 
     def get_text_surface(self, text, size=25):
 
-        my_font = pygame.font.Font(cfg.FONT_PATH, size)
-        text_surface = my_font.render(text, True, pygame.Color(255, 0, 0))
-        return text_surface
+        try:
+            my_font = pygame.font.Font(cfg.FONT_PATH, size)
+            text_surface = my_font.render(text, True, pygame.Color(255, 0, 0))
+            return text_surface
+        except (pygame.error, FileNotFoundError) as e:
+            print(f"[警告] 创建文字表面失败: {text} - {e}")
+            return None
 
     def get_event(self):
+        """处理键盘按键事件"""
         nv = self.normal_variables
         event_list = pygame.event.get()
         for event in event_list:
@@ -854,7 +892,7 @@ class MainGame:
         nv.keys_pressed = pygame.key.get_pressed()
 
     def end_game(self):
-        # 清理网络资源
+        """退出游戏"""
         print("退出游戏")
         pygame.quit()
         exit()
@@ -908,15 +946,19 @@ class MainGame:
     def _render_transition_kills(self):
         """在关卡切换时渲染击杀统计"""
         nv = self.normal_variables
-        my_font = pygame.font.Font(cfg.FONT_PATH, 36)
-        kills = self._last_level_kills
-        kills_text = my_font.render(f'击杀: {kills}', True, pygame.Color(255, 255, 0))
-        text_x = nv.window_size[0] / 2 - kills_text.get_width() / 2
-        text_y = nv.window_size[1] / 2 + 40
-        nv.window.blit(kills_text, (text_x, text_y))
+        try:
+            my_font = pygame.font.Font(cfg.FONT_PATH, 36)
+            kills = self._last_level_kills
+            kills_text = my_font.render(f'击杀: {kills}', True, pygame.Color(255, 255, 0))
+            text_x = nv.window_size[0] / 2 - kills_text.get_width() / 2
+            text_y = nv.window_size[1] / 2 + 40
+            nv.window.blit(kills_text, (text_x, text_y))
+        except (pygame.error, FileNotFoundError) as e:
+            print(f"[警告] 渲染击杀统计失败: {e}")
 
 
 class MultiplayerGame:
+    """联机游戏类，同时支持Host和Client端运行"""
     TRANSITION_DELAY = 3000  # 关卡切换显示时间（毫秒）
 
     def __init__(self, host_network=None, host_ip=None, username=None):
@@ -1120,8 +1162,12 @@ class MultiplayerGame:
         if not os.path.exists(path):
             path = os.path.join(cfg.LEVEL_FILE_DIR, '1.lvl')
 
-        with open(path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+        except (OSError, FileNotFoundError) as e:
+            print(f"[警告] 读取关卡文件失败: {path} - {e}")
+            lines = []
 
         # 清除现有对象
         MainGame.walls.empty()
@@ -1140,43 +1186,47 @@ class MultiplayerGame:
 
         for i, line in enumerate(lines):
             line = line.strip()
-            if line.startswith('%TOTALENEMYNUM:'):
-                config['total_enemy_num'] = int(line.split(':')[1])
-            elif line.startswith('%MAXENEMYNUM:'):
-                config['max_enemy_num'] = int(line.split(':')[1])
-            elif line.startswith('%HOMEPOS:'):
-                pos_str = line.split(':')[1]
-                x, y = map(int, pos_str.split(','))
-                config['home_pos'] = (x, y)
-            elif line.startswith('%HOMEAROUNDPOS:'):
-                pos_str = line.split(':')[1]
-                positions = []
-                for pos in pos_str.split():
-                    x, y = map(int, pos.split(','))
-                    positions.append((x, y))
-                config['home_around_pos'] = positions
-            elif line.startswith('%PLAYERTANKPOS:'):
-                pos_str = line.split(':')[1]
-                positions = []
-                for pos in pos_str.split():
-                    x, y = map(int, pos.split(','))
-                    positions.append((x, y))
-                config['player_tank_pos'] = positions
-            elif line.startswith('%ENEMYTANKPOS:'):
-                pos_str = line.split(':')[1]
-                positions = []
-                for pos in pos_str.split():
-                    x, y = map(int, pos.split(','))
-                    positions.append((x * nv.cell_len, y * nv.cell_len))
-                config['enemy_tank_pos'] = positions
-            elif line and not line.startswith('#') and not line.startswith('%'):
-                for row_i, elem in enumerate(line.split(' ')):
-                    pos = (row_i * nv.cell_len, num_row * nv.cell_len)
-                    self._scenes_event.scenes_creation(elem, pos)
-                    # 捕获Host端分配的场景ID，确保Client端ID一致
-                    scene_id = self._scenes_event.allocated_scenes_id - 1
-                    walls_list.append({'type': elem, 'x': pos[0], 'y': pos[1], 'id': scene_id})
-                num_row += 1
+            try:
+                if line.startswith('%TOTALENEMYNUM:'):
+                    config['total_enemy_num'] = int(line.split(':')[1])
+                elif line.startswith('%MAXENEMYNUM:'):
+                    config['max_enemy_num'] = int(line.split(':')[1])
+                elif line.startswith('%HOMEPOS:'):
+                    pos_str = line.split(':')[1]
+                    x, y = map(int, pos_str.split(','))
+                    config['home_pos'] = (x, y)
+                elif line.startswith('%HOMEAROUNDPOS:'):
+                    pos_str = line.split(':')[1]
+                    positions = []
+                    for pos in pos_str.split():
+                        x, y = map(int, pos.split(','))
+                        positions.append((x, y))
+                    config['home_around_pos'] = positions
+                elif line.startswith('%PLAYERTANKPOS:'):
+                    pos_str = line.split(':')[1]
+                    positions = []
+                    for pos in pos_str.split():
+                        x, y = map(int, pos.split(','))
+                        positions.append((x, y))
+                    config['player_tank_pos'] = positions
+                elif line.startswith('%ENEMYTANKPOS:'):
+                    pos_str = line.split(':')[1]
+                    positions = []
+                    for pos in pos_str.split():
+                        x, y = map(int, pos.split(','))
+                        positions.append((x * nv.cell_len, y * nv.cell_len))
+                    config['enemy_tank_pos'] = positions
+                elif line and not line.startswith('#') and not line.startswith('%'):
+                    for row_i, elem in enumerate(line.split(' ')):
+                        pos = (row_i * nv.cell_len, num_row * nv.cell_len)
+                        self._scenes_event.scenes_creation(elem, pos)
+                        # 捕获Host端分配的场景ID，确保Client端ID一致
+                        scene_id = self._scenes_event.allocated_scenes_id - 1
+                        walls_list.append({'type': elem, 'x': pos[0], 'y': pos[1], 'id': scene_id})
+                    num_row += 1
+            except (ValueError, IndexError) as e:
+                print(f"[警告] 解析关卡配置行失败: '{line}' - {e}")
+                continue
 
         self._level_config = config
         self._walls_data = walls_list
@@ -1212,6 +1262,7 @@ class MultiplayerGame:
         time.sleep(0.1)
 
     def _create_host_tank(self, position):
+        """创建Host玩家的坦克"""
         tank_id = 0
         self._my_tank = MyTank(
             position, self._window, self.nv.window_size,
@@ -1221,6 +1272,7 @@ class MultiplayerGame:
         MainGame.my_tank = self._my_tank
 
     def _create_teammate_tank(self, position):
+        """创建队友坦克（由客户端控制）"""
         self._teammate_tank = MyTank(
             position, self._window, self.nv.window_size,
             1, player_key='player2'
@@ -1316,6 +1368,7 @@ class MultiplayerGame:
             self._teammate_tank.rect = old_rect
 
     def _update_host(self):
+        """更新Host端游戏逻辑"""
         self._tanks_event.tanks_update()
         self._bullet_event.bullets_update()
         self._collision_event.collision_update()
@@ -1330,6 +1383,7 @@ class MultiplayerGame:
         self._panel_x = cfg.WIDTH + 10
 
     def _render_host(self):
+        """渲染Host端游戏画面"""
         self._window.fill((0, 0, 0))
         background_image = OtherImageCache.get_other_image('background')
         self._window.blit(background_image, (0, 0))
@@ -1373,17 +1427,22 @@ class MultiplayerGame:
 
         # 信息面板
         enemy_text = self.get_text_surface(f"敌人: {self.nv.remaining_enemies}", 20)
-        self._window.blit(enemy_text, (self._panel_x, 10))
+        if enemy_text:
+            self._window.blit(enemy_text, (self._panel_x, 10))
 
-        font = pygame.font.Font(cfg.FONT_PATH, 20)
-        if self._my_tank:
-            hp_text = font.render(f"P1血量: {self._my_tank.hp}", True, pygame.Color(255, 0, 0))
-            self._window.blit(hp_text, (self._panel_x, 50))
-        if self._teammate_tank:
-            hp_text = font.render(f"P2血量: {self._teammate_tank.hp}", True, pygame.Color(0, 255, 0))
-            self._window.blit(hp_text, (self._panel_x, 80))
+        try:
+            font = pygame.font.Font(cfg.FONT_PATH, 20)
+            if self._my_tank:
+                hp_text = font.render(f"P1血量: {self._my_tank.hp}", True, pygame.Color(255, 0, 0))
+                self._window.blit(hp_text, (self._panel_x, 50))
+            if self._teammate_tank:
+                hp_text = font.render(f"P2血量: {self._teammate_tank.hp}", True, pygame.Color(0, 255, 0))
+                self._window.blit(hp_text, (self._panel_x, 80))
+        except (pygame.error, FileNotFoundError) as e:
+            print(f"[警告] 渲染主机信息面板失败: {e}")
 
     def _sync_to_client(self):
+        """同步游戏状态快照到客户端"""
         snapshot = GameStateSnapshot()
 
         # 收集坦克数据
@@ -1509,17 +1568,21 @@ class MultiplayerGame:
     def _render_multiplayer_transition_kills(self):
         """在联机关卡切换时渲染双方击杀统计"""
         nv = self.nv
-        my_font = pygame.font.Font(cfg.FONT_PATH, 36)
-        p1_text = my_font.render(f'P1击杀: {self._last_p1_kills}', True, pygame.Color(255, 255, 0))
-        p2_text = my_font.render(f'P2击杀: {self._last_p2_kills}', True, pygame.Color(0, 255, 0))
-        text_x = nv.window_size[0] / 2 - p1_text.get_width() / 2
-        text_y = nv.window_size[1] / 2 + 40
-        nv.window.blit(p1_text, (text_x, text_y))
-        p2_x = nv.window_size[0] / 2 - p2_text.get_width() / 2
-        p2_y = text_y + 45
-        nv.window.blit(p2_text, (p2_x, p2_y))
+        try:
+            my_font = pygame.font.Font(cfg.FONT_PATH, 36)
+            p1_text = my_font.render(f'P1击杀: {self._last_p1_kills}', True, pygame.Color(255, 255, 0))
+            p2_text = my_font.render(f'P2击杀: {self._last_p2_kills}', True, pygame.Color(0, 255, 0))
+            text_x = nv.window_size[0] / 2 - p1_text.get_width() / 2
+            text_y = nv.window_size[1] / 2 + 40
+            nv.window.blit(p1_text, (text_x, text_y))
+            p2_x = nv.window_size[0] / 2 - p2_text.get_width() / 2
+            p2_y = text_y + 45
+            nv.window.blit(p2_text, (p2_x, p2_y))
+        except (pygame.error, FileNotFoundError) as e:
+            print(f"[警告] 渲染联机过渡击杀统计失败: {e}")
 
     def _start_as_client(self):
+        """以Client端启动联机游戏"""
         # 初始化窗口
         self._window = pygame.display.set_mode((cfg.WIDTH + cfg.PANEL_WIDTH, cfg.HEIGHT))
         pygame.font.init()
@@ -1658,6 +1721,7 @@ class MultiplayerGame:
             time.sleep(0.01)
 
     def _create_walls_from_data(self):
+        """根据接收到的关卡数据创建墙体"""
         self._render_walls.empty()
         if not self._walls_data:
             return
@@ -1715,6 +1779,7 @@ class MultiplayerGame:
         self._client_network.send_input(key_order, space_pressed)
 
     def _process_received_state(self):
+        """处理从Host接收到的游戏状态快照"""
         snapshot = self._client_network.latest_snapshot
         if snapshot is None:
             return
@@ -1817,6 +1882,7 @@ class MultiplayerGame:
         self._snapshot_game_info = game_info
 
     def _render_client(self):
+        """渲染Client端游戏画面"""
         self._window.fill((0, 0, 0))
         background_image = OtherImageCache.get_other_image('background')
         self._window.blit(background_image, (0, 0))
@@ -1853,53 +1919,64 @@ class MultiplayerGame:
 
         # 信息面板
         game_info = getattr(self, '_snapshot_game_info', {})
-        font = pygame.font.Font(cfg.FONT_PATH, 20)
+        try:
+            font = pygame.font.Font(cfg.FONT_PATH, 20)
 
-        remaining = game_info.get('remaining_enemies', 0)
-        enemy_text = font.render(f"敌人: {remaining}", True, pygame.Color(255, 0, 0))
-        self._window.blit(enemy_text, (self._panel_x, 10))
+            remaining = game_info.get('remaining_enemies', 0)
+            enemy_text = font.render(f"敌人: {remaining}", True, pygame.Color(255, 0, 0))
+            self._window.blit(enemy_text, (self._panel_x, 10))
 
-        p1_hp = game_info.get('player1_hp', 0)
-        hp_text = font.render(f"P1血量: {p1_hp}", True, pygame.Color(255, 0, 0))
-        self._window.blit(hp_text, (self._panel_x, 50))
+            p1_hp = game_info.get('player1_hp', 0)
+            hp_text = font.render(f"P1血量: {p1_hp}", True, pygame.Color(255, 0, 0))
+            self._window.blit(hp_text, (self._panel_x, 50))
 
-        p2_hp = game_info.get('player2_hp', 0)
-        hp_text2 = font.render(f"P2血量: {p2_hp}", True, pygame.Color(0, 255, 0))
-        self._window.blit(hp_text2, (self._panel_x, 80))
+            p2_hp = game_info.get('player2_hp', 0)
+            hp_text2 = font.render(f"P2血量: {p2_hp}", True, pygame.Color(0, 255, 0))
+            self._window.blit(hp_text2, (self._panel_x, 80))
+        except (pygame.error, FileNotFoundError) as e:
+            print(f"[警告] 渲染客户端信息面板失败: {e}")
 
         # 游戏结束提示（在所有图层之上）
-        if game_info.get('game_win'):
-            my_font = pygame.font.Font(cfg.FONT_PATH, 50)
-            win_text = my_font.render('You Win', True, pygame.Color(255, 0, 0))
-            self._window.blit(win_text, (
-                cfg.WIDTH / 2 - win_text.get_width() / 2,
-                cfg.HEIGHT / 2 - win_text.get_height() / 2
-            ))
-        elif game_info.get('game_lose'):
-            game_over_image = OtherImageCache.get_other_image('gameover')
-            logo_width = 300
-            logo_height = int(game_over_image.get_height() * (logo_width / game_over_image.get_width()))
-            game_over_image = pygame.transform.scale(game_over_image, (logo_width, logo_height))
-            self._window.blit(game_over_image, (
-                cfg.WIDTH / 2 - game_over_image.get_width() / 2,
-                cfg.HEIGHT / 2 - game_over_image.get_height() / 2
-            ))
+        try:
+            if game_info.get('game_win'):
+                my_font = pygame.font.Font(cfg.FONT_PATH, 50)
+                win_text = my_font.render('You Win', True, pygame.Color(255, 0, 0))
+                self._window.blit(win_text, (
+                    cfg.WIDTH / 2 - win_text.get_width() / 2,
+                    cfg.HEIGHT / 2 - win_text.get_height() / 2
+                ))
+            elif game_info.get('game_lose'):
+                game_over_image = OtherImageCache.get_other_image('gameover')
+                if game_over_image:
+                    logo_width = 300
+                    logo_height = int(game_over_image.get_height() * (logo_width / game_over_image.get_width()))
+                    game_over_image = pygame.transform.scale(game_over_image, (logo_width, logo_height))
+                    self._window.blit(game_over_image, (
+                        cfg.WIDTH / 2 - game_over_image.get_width() / 2,
+                        cfg.HEIGHT / 2 - game_over_image.get_height() / 2
+                    ))
+        except (pygame.error, AttributeError) as e:
+            print(f"[警告] 渲染客户端游戏结束提示失败: {e}")
 
     def _render_client_transition_kills(self, game_info):
         """Client端渲染关卡切换时的击杀统计"""
-        my_font = pygame.font.Font(cfg.FONT_PATH, 36)
-        p1_kills = game_info.get('player1_kills', 0)
-        p2_kills = game_info.get('player2_kills', 0)
-        p1_text = my_font.render(f'P1击杀: {p1_kills}', True, pygame.Color(255, 255, 0))
-        p2_text = my_font.render(f'P2击杀: {p2_kills}', True, pygame.Color(0, 255, 0))
-        text_x = cfg.WIDTH / 2 - p1_text.get_width() / 2
-        text_y = cfg.HEIGHT / 2 + 40
-        self._window.blit(p1_text, (text_x, text_y))
-        p2_x = cfg.WIDTH / 2 - p2_text.get_width() / 2
-        p2_y = text_y + 45
-        self._window.blit(p2_text, (p2_x, p2_y))
+        try:
+            my_font = pygame.font.Font(cfg.FONT_PATH, 36)
+            p1_kills = game_info.get('player1_kills', 0)
+            p2_kills = game_info.get('player2_kills', 0)
+            p1_text = my_font.render(f'P1击杀: {p1_kills}', True, pygame.Color(255, 255, 0))
+            p2_text = my_font.render(f'P2击杀: {p2_kills}', True, pygame.Color(0, 255, 0))
+            text_x = cfg.WIDTH / 2 - p1_text.get_width() / 2
+            text_y = cfg.HEIGHT / 2 + 40
+            self._window.blit(p1_text, (text_x, text_y))
+            p2_x = cfg.WIDTH / 2 - p2_text.get_width() / 2
+            p2_y = text_y + 45
+            self._window.blit(p2_text, (p2_x, p2_y))
+        except (pygame.error, FileNotFoundError) as e:
+            print(f"[警告] 渲染客户端过渡击杀统计失败: {e}")
 
     def get_text_surface(self, text, size=25):
+        """创建文字表面"""
         my_font = pygame.font.Font(cfg.FONT_PATH, size)
         text_surface = my_font.render(text, True, pygame.Color(255, 0, 0))
         return text_surface

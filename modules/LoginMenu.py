@@ -29,9 +29,15 @@ class LoginMenu:
             self.logo_image = None
 
         # 字体
-        self.font = pygame.font.Font(cfg.FONT_PATH, 28)
-        self.small_font = pygame.font.Font(cfg.FONT_PATH, 22)
-        self.message_font = pygame.font.Font(cfg.FONT_PATH, 20)
+        try:
+            self.font = pygame.font.Font(cfg.FONT_PATH, 28)
+            self.small_font = pygame.font.Font(cfg.FONT_PATH, 22)
+            self.message_font = pygame.font.Font(cfg.FONT_PATH, 20)
+        except (pygame.error, FileNotFoundError) as e:
+            print(f"[警告] 加载字体文件失败: {e}")
+            self.font = None
+            self.small_font = None
+            self.message_font = None
 
         # 输入框
         input_width = 300
@@ -81,6 +87,7 @@ class LoginMenu:
         return self.username  # 登录成功时返回用户名，退出时返回None
 
     def render(self):
+        """渲染登录界面"""
         self.window.fill(cfg.WINDOW_COLOR)
 
         # 绘制logo
@@ -167,9 +174,11 @@ class LoginMenu:
         pygame.display.update()
 
     def update(self):
+        """更新状态"""
         self.get_event()
 
     def get_event(self):
+        """处理键盘和鼠标事件"""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False

@@ -13,6 +13,7 @@ import cfg
 
 
 class HostNetwork:
+    """主机端网络管理，处理客户端连接、状态同步和输入接收"""
 
     def __init__(self, port=cfg.NETWORK_PORT):
         self._port = port
@@ -48,6 +49,7 @@ class HostNetwork:
             return inp
 
     def start_listening(self) -> bool:
+        """绑定端口并开始监听客户端连接"""
         try:
             self._socket.bind(self._port)
             self._waiting_for_client = True
@@ -103,6 +105,7 @@ class HostNetwork:
         self._socket.send(NetworkMessage.disconnect(reason), self._client_addr)
 
     def close(self):
+        """关闭网络连接"""
         self.running = False
         if self._connected:
             self.send_disconnect("host_shutdown")
@@ -112,6 +115,7 @@ class HostNetwork:
         print("Host网络已关闭")
 
     def _process_incoming(self):
+        """处理所有待接收的消息"""
         while True:
             data, addr = self._socket.receive(timeout=0.0)
             if data is None:

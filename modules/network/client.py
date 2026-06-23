@@ -15,6 +15,7 @@ import cfg
 
 
 class ClientNetwork:
+    """客户端网络管理，处理与Host的连接、输入发送和状态接收"""
 
     def __init__(self):
         self._socket = UDPSocket(buffer_size=65536)
@@ -66,6 +67,7 @@ class ClientNetwork:
         return False
 
     def connect(self, host, port=None) -> bool:
+        """连接至指定主机"""
         port = port or cfg.NETWORK_PORT
         self._host_addr = (host, port)
 
@@ -80,7 +82,7 @@ class ClientNetwork:
             return False
 
     def try_connect_handshake(self) -> bool:
-
+        """尝试三次握手的连接确认"""
         while self._running and not self._connected:
 
             # 处理pygame事件
@@ -117,6 +119,7 @@ class ClientNetwork:
         self._process_incoming()
 
     def send_input(self, key_order: list, space_pressed: bool):
+        """发送按键输入到Host（含限频控制）"""
         if not self._connected:
             return
 
@@ -134,6 +137,7 @@ class ClientNetwork:
         self._socket.send(data)
 
     def close(self):
+        """断开网络连接"""
         self._running = False
         if self._connected:
             self._socket.send(NetworkMessage.disconnect("client_shutdown"))
@@ -142,6 +146,7 @@ class ClientNetwork:
         print("[Client] 网络已关闭")
 
     def _process_incoming(self):
+        """处理所有待接收的消息"""
         while True:
             data, addr = self._socket.receive(timeout=0.0)
             if data is None:

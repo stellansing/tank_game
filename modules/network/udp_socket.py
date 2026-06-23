@@ -5,6 +5,7 @@ from typing import Tuple
 
 
 class UDPSocket:
+    """UDP套接字封装，提供绑定、发送和接收功能"""
 
     def __init__(self, buffer_size=65536):
 
@@ -15,12 +16,15 @@ class UDPSocket:
         self._remote_addr = None
 
     def bind(self, port=5555):
+        """绑定端口"""
         self._sock.bind(('0.0.0.0', port))
 
     def set_remote(self, host, port):
+        """设置远程地址"""
         self._remote_addr = (host, port)
 
     def send(self, data: bytes, addr: Tuple = None) -> bool:
+        """发送UDP数据包"""
         target = addr or self._remote_addr
         if target is None:
             return False
@@ -31,6 +35,7 @@ class UDPSocket:
             return False
 
     def receive(self, timeout=0.5):
+        """接收UDP数据包（非阻塞，可设置超时）"""
         try:
             ready = select.select([self._sock], [], [], timeout)
             if ready[0]:
@@ -43,6 +48,7 @@ class UDPSocket:
         return None, None
 
     def close(self) -> None:
+        """关闭套接字"""
         try:
             self._sock.close()
         except (OSError, socket.error):

@@ -3,7 +3,9 @@ import os
 
 '''字体'''
 FONT_PATH = os.path.join(os.getcwd(), 'resources/font/Mojangles.ttf')
-'''图片'''
+
+'''图片资源路径'''
+# 子弹图片
 BULLET_IMAGE_PATHS = {
     'U': os.path.join(os.getcwd(), 'resources/images/bullet/bullet_up.png'),
     'D': os.path.join(os.getcwd(), 'resources/images/bullet/bullet_down.png'),
@@ -58,15 +60,25 @@ SCENE_IMAGE_PATHS = {
     'tree': os.path.join(os.getcwd(), 'resources/images/scene/tree.png')
 }
 OTHER_IMAGE_PATHS = {
+    # 坦克出现特效
     'appear': os.path.join(os.getcwd(), 'resources/images/others/appear.png'),
+    # 背景图
     'background': os.path.join(os.getcwd(), 'resources/images/others/background.png'),
+    # 动态爆炸效果
     'boom_dynamic': os.path.join(os.getcwd(), 'resources/images/others/boom_dynamic.png'),
+    # 静态爆炸效果
     'boom_static': os.path.join(os.getcwd(), 'resources/images/others/boom_static.png'),
+    # 游戏结束图
     'gameover': os.path.join(os.getcwd(), 'resources/images/others/gameover.png'),
+    # logo
     'logo': os.path.join(os.getcwd(), 'resources/images/others/logo.png'),
+    # 遮罩层
     'mask': os.path.join(os.getcwd(), 'resources/images/others/mask.png'),
+    # 护盾效果
     'protect': os.path.join(os.getcwd(), 'resources/images/others/protect.png'),
+    # 操作提示
     'tip': os.path.join(os.getcwd(), 'resources/images/others/tip.png'),
+    # 游戏信息栏
     'gamebar': os.path.join(os.getcwd(), 'resources/images/others/gamebar.png')
 }
 '''声音'''
