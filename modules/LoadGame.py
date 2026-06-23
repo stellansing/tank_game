@@ -117,8 +117,8 @@ class TanksEvent:
             self.all_collision.add(enemy_tank)
             return True
         return False
-    # 射击-更新
 
+    # 射击-更新
     def tanks_shot(self):
         self.all_players_shot()
         self.enemy_tank_shot()
@@ -131,7 +131,6 @@ class TanksEvent:
                 if bullet:
                     self.allocated_bullet_id += 1
                     self.my_bullets.add(bullet)
-                # self.fire_music.play_music()
 
     def enemy_tank_shot(self):
         for enemy in self.enemy_tanks:
@@ -515,12 +514,6 @@ class GameResultEvent:
         self.teammate_tank = teammate_tank
         self.enemy_tanks = enemy_tanks
 
-    def game_result_update(self):
-        """更新游戏胜负判定"""
-        self.game_win_check()
-        self.game_lose_check()
-        self.game_result_check()
-
     def check_game_state(self):
         self.game_win_check()
         self.game_lose_check()
@@ -612,7 +605,7 @@ class MainGame:
         MainGame.window = pygame.display.set_mode((cfg.WIDTH + cfg.PANEL_WIDTH, cfg.HEIGHT))
         pygame.font.init()
         pygame.display.set_caption(cfg.TITLE)
-
+        pygame.display.set_icon(pygame.image.load(cfg.ICON_PATH))
         TankImageCache.initialize(cfg)
         OtherImageCache.initialize(cfg)
 
@@ -799,9 +792,6 @@ class MainGame:
         self.bullet_event.bullets_update()
         self.collision_event.collision_update()
 
-        # 更新菜单
-        self.menu()
-
     def render(self):
         """渲染所有元素"""
         nv = self.normal_variables
@@ -817,6 +807,8 @@ class MainGame:
 
         # 先检查游戏状态（不渲染）
         self.game_result_event.check_game_state()
+
+        self.render_panel()
 
         # 渲染场景（墙壁、河流）
         self.scenes_event.render()
@@ -835,12 +827,6 @@ class MainGame:
         self.collision_event.render()
         # 游戏结果渲染在所有图层之上
         self.game_result_event.render_game_result()
-
-        self.render_panel()
-
-    def menu(self):
-        # 显示右侧信息面板
-        self.panel_x = cfg.WIDTH + 10
 
     def render_panel(self):
         """渲染信息面板"""
@@ -1017,7 +1003,7 @@ class MultiplayerGame:
         MainGame.window = pygame.display.set_mode((cfg.WIDTH + cfg.PANEL_WIDTH, cfg.HEIGHT))
         pygame.font.init()
         pygame.display.set_caption(cfg.TITLE + " - Host")
-
+        pygame.display.set_icon(pygame.image.load(cfg.ICON_PATH))
         TankImageCache.initialize(cfg)
         OtherImageCache.initialize(cfg)
 
@@ -1156,7 +1142,7 @@ class MultiplayerGame:
         self._host_network.close()
 
     def _load_level_for_host(self, level):
-        """Host端加载关卡（复用MainGame的load_lvl逻辑）"""
+        """Host端加载关卡"""
         nv = self.nv
         path = os.path.join(cfg.LEVEL_FILE_DIR, f'{level}.lvl')
         if not os.path.exists(path):
@@ -1517,7 +1503,7 @@ class MultiplayerGame:
         nv.home = None
         nv.total_created_enemy_tanks = 0
 
-        # 重建ScenesEvent（关键：让墙体ID从0重新开始，与Client端匹配）
+        # 重建ScenesEvent
         self._scenes_event = ScenesEvent(
             MainGame.all_collision, MainGame.walls,
             MainGame.rivers, MainGame.trees, MainGame.ices, nv
@@ -1587,6 +1573,7 @@ class MultiplayerGame:
         self._window = pygame.display.set_mode((cfg.WIDTH + cfg.PANEL_WIDTH, cfg.HEIGHT))
         pygame.font.init()
         pygame.display.set_caption(cfg.TITLE + " - Client")
+        pygame.display.set_icon(pygame.image.load(cfg.ICON_PATH))
 
         TankImageCache.initialize(cfg)
         OtherImageCache.initialize(cfg)
@@ -1621,6 +1608,7 @@ class MultiplayerGame:
         self._running = True
         SoundManager.play_start()
         self._transition_timer = 0
+        self._game_result_printed = False
 
         # Client主循环
         while self._running:
@@ -1647,6 +1635,7 @@ class MultiplayerGame:
                 self._create_walls_from_data()
                 self._game_started = False
                 self._snapshot_game_info = {}
+                self._game_result_printed = False
                 self._transition_timer = 0
                 # 跳过本帧的状态处理，等待下一帧Host的新快照
                 self._render_client()
@@ -1818,7 +1807,7 @@ class MultiplayerGame:
                             direction=bullet_snap['direction'])
             self._render_bullets.add(bullet)
 
-        # 更新墙体（只在初始加载时创建，后续只更新状态）
+        # 更新墙体
         if snapshot.walls:
             wall_dict = {wd['id']: wd for wd in snapshot.walls}
             for wall in list(self._render_walls):
@@ -1874,10 +1863,13 @@ class MultiplayerGame:
 
         # 检查游戏结束
         game_info = snapshot.game_info or {}
-        if game_info.get('game_win'):
-            print("[Client] 游戏胜利!")
-        elif game_info.get('game_lose'):
-            print("[Client] 游戏失败!")
+        if not getattr(self, '_game_result_printed', False):
+            if game_info.get('game_win'):
+                print("[Client] 游戏胜利!")
+                self._game_result_printed = True
+            elif game_info.get('game_lose'):
+                print("[Client] 游戏失败!")
+                self._game_result_printed = True
 
         self._snapshot_game_info = game_info
 

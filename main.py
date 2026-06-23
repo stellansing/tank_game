@@ -33,8 +33,7 @@ from modules.MainMenu import MainMenu
 
 if __name__ == '__main__':
     try:
-        login_menu = LoginMenu()
-        username = login_menu.run()
+        username = LoginMenu().run()
         if username:
             MainMenu(username).run()
     except Exception as e:

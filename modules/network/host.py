@@ -22,9 +22,9 @@ class HostNetwork:
         self._connected = False
         self.running = False
 
-        # 状态同步
+        # 状态同步（基于时间）
         self._sync_interval = cfg.NETWORK_SYNC_INTERVAL
-        self._frame_counter = 0
+        self._last_sync_time = 0
 
         # 客户端输入缓存
         self._latest_input = None
@@ -78,8 +78,9 @@ class HostNetwork:
     def send_state(self, snapshot: GameStateSnapshot):
         if not self._connected:
             return
-        self._frame_counter += 1
-        if self._frame_counter % self._sync_interval == 0:
+        now = pygame.time.get_ticks()
+        if now - self._last_sync_time >= self._sync_interval:
+            self._last_sync_time = now
             data = NetworkMessage.state_snapshot(snapshot)
             self._socket.send(data, self._client_addr)
 

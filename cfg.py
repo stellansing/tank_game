@@ -105,6 +105,12 @@ REBORN_INTERVAL = 300
 INITIAL_TICK = 60
 
 TITLE = '坦克大战'
+'''窗口图标'''
+ICON_PATH = SCENE_IMAGE_PATHS['tree']
+'''数据文件'''
+USERS_FILE = os.path.join(os.getcwd(), 'data', 'users.json')
+RECORDS_FILE = os.path.join(os.getcwd(), 'data', 'records.json')
+
 '''关卡'''
 LEVEL_FILE_DIR = os.path.join(os.getcwd(), 'modules/levels')
 
@@ -113,8 +119,8 @@ LEVEL_FILE_DIR = os.path.join(os.getcwd(), 'modules/levels')
 NETWORK_PORT = 5555
 # UDP接收缓冲区大小（字节）
 NETWORK_BUFFER_SIZE = 65536
-# 状态同步间隔（帧数），值越小越流畅但带宽越高
-NETWORK_SYNC_INTERVAL = 2
+# 状态同步间隔（毫秒），值越小越流畅但带宽越高
+NETWORK_SYNC_INTERVAL = 33
 # 连接超时（秒）
 NETWORK_TIMEOUT = 10.0
 # 等待客户端连接的超时（秒），0表示不等待直接进入游戏

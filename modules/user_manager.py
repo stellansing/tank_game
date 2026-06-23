@@ -1,3 +1,4 @@
+import cfg
 import json
 import os
 from datetime import datetime
@@ -6,8 +7,8 @@ from datetime import datetime
 class UserManager:
     """用户管理类，处理登录、注册和游戏记录"""
 
-    USERS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'users.json')
-    RECORDS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'records.json')
+    USERS_FILE = cfg.USERS_FILE
+    RECORDS_FILE = cfg.RECORDS_FILE
 
     @classmethod
     def _ensure_data_dir(cls):

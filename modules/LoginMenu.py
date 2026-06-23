@@ -1,43 +1,30 @@
 import pygame
 import cfg
+from modules.BaseMenu import BaseMenu, Button, Button
 from modules.user_manager import UserManager
 
 
-class LoginMenu:
+class LoginMenu(BaseMenu):
     """登录/注册菜单"""
 
     def __init__(self):
-        self.running = None
+        super().__init__(title_suffix="登录")
         self.username = None
-        pygame.display.init()
-        pygame.font.init()
-
-        self.window_size = (cfg.WIDTH, cfg.HEIGHT)
-        self.window = pygame.display.set_mode(self.window_size)
-        pygame.display.set_caption(cfg.TITLE + " - 登录")
-
-        self.clock = pygame.time.Clock()
 
         # 加载logo图片
         try:
             logo_image = pygame.image.load(cfg.OTHER_IMAGE_PATHS.get('logo'))
             logo_width = 250
-            logo_height = int(logo_image.get_height() * (logo_width / logo_image.get_width()))
+            logo_height = int(logo_image.get_height() * (logo_width / logo_image.get_width()))#等比缩小
             self.logo_image = pygame.transform.scale(logo_image, (logo_width, logo_height))
             self.logo_rect = self.logo_image.get_rect(center=(self.window_size[0] // 2, 60))
         except Exception:
             self.logo_image = None
 
         # 字体
-        try:
-            self.font = pygame.font.Font(cfg.FONT_PATH, 28)
-            self.small_font = pygame.font.Font(cfg.FONT_PATH, 22)
-            self.message_font = pygame.font.Font(cfg.FONT_PATH, 20)
-        except (pygame.error, FileNotFoundError) as e:
-            print(f"[警告] 加载字体文件失败: {e}")
-            self.font = None
-            self.small_font = None
-            self.message_font = None
+        self.font = self.load_font(cfg.FONT_PATH, 28)
+        self.small_font = self.load_font(cfg.FONT_PATH, 22)
+        self.message_font = self.load_font(cfg.FONT_PATH, 20)
 
         # 输入框
         input_width = 300
@@ -62,10 +49,14 @@ class LoginMenu:
         self.password_active = False
 
         # 登录按钮
-        button_width = 150
-        button_height = 50
-        self.login_button_rect = pygame.Rect(
-            center_x - button_width // 2, 350, button_width, button_height
+        self.login_button = Button(
+            center_x - 75, 350, 150, 50,
+            "登录 / 注册",
+            cfg.FONT_PATH,
+            font_size=22,
+            color=(255, 255, 255),
+            hover_color=(255, 255, 0),
+            bg_color=(50, 50, 50)
         )
 
         # 消息
@@ -77,13 +68,28 @@ class LoginMenu:
         self.active_input = 0  # 0: 用户名, 1: 密码
         self.username_active = True
 
+        # 预渲染静态文本
+        self.title_surf = self.font.render("玩家登录", True, (255, 255, 255))
+        self.title_rect = self.title_surf.get_rect(center=(self.window_size[0] // 2, 120))
+
+        self.username_label_surf = self.small_font.render(self.username_label, True, (200, 200, 200))
+        self.username_label_pos = (
+            self.username_rect.x - self.username_label_surf.get_width() - 10,
+            self.username_rect.y + (self.username_rect.height - self.username_label_surf.get_height()) // 2
+        )
+
+        self.password_label_surf = self.small_font.render(self.password_label, True, (200, 200, 200))
+        self.password_label_pos = (
+            self.password_rect.x - self.password_label_surf.get_width() - 10,
+            self.password_rect.y + (self.password_rect.height - self.password_label_surf.get_height()) // 2
+        )
+
+        self.hint_surf = self.small_font.render("Tab切换输入框 | Enter登录", True, (120, 120, 120))
+        self.hint_rect = self.hint_surf.get_rect(center=(self.window_size[0] // 2, 420))
+
     def run(self):
         """运行登录菜单，返回用户名（登录成功时）"""
-        self.running = True
-        while self.running:
-            self.clock.tick(60)
-            self.update()
-            self.render()
+        super().run()
         return self.username  # 登录成功时返回用户名，退出时返回None
 
     def render(self):
@@ -95,15 +101,10 @@ class LoginMenu:
             self.window.blit(self.logo_image, self.logo_rect)
 
         # 绘制标题
-        title = self.font.render("玩家登录", True, (255, 255, 255))
-        title_rect = title.get_rect(center=(self.window_size[0] // 2, 120))
-        self.window.blit(title, title_rect)
+        self.window.blit(self.title_surf, self.title_rect)
 
         # 绘制用户名标签
-        username_label_surf = self.small_font.render(self.username_label, True, (200, 200, 200))
-        label_x = self.username_rect.x - username_label_surf.get_width() - 10
-        label_y = self.username_rect.y + (self.username_rect.height - username_label_surf.get_height()) // 2
-        self.window.blit(username_label_surf, (label_x, label_y))
+        self.window.blit(self.username_label_surf, self.username_label_pos)
 
         # 绘制用户名输入框
         username_color = (255, 255, 0) if self.username_active else (255, 255, 255)
@@ -125,10 +126,7 @@ class LoginMenu:
                              (cursor_x, cursor_y + self.username_rect.height - 20), 2)
 
         # 绘制密码标签
-        pwd_label_surf = self.small_font.render(self.password_label, True, (200, 200, 200))
-        pwd_label_x = self.password_rect.x - pwd_label_surf.get_width() - 10
-        pwd_label_y = self.password_rect.y + (self.password_rect.height - pwd_label_surf.get_height()) // 2
-        self.window.blit(pwd_label_surf, (pwd_label_x, pwd_label_y))
+        self.window.blit(self.password_label_surf, self.password_label_pos)
 
         # 绘制密码输入框
         pwd_color = (255, 255, 0) if self.password_active else (255, 255, 255)
@@ -150,20 +148,10 @@ class LoginMenu:
                              (cursor_x, cursor_y + self.password_rect.height - 20), 2)
 
         # 绘制登录按钮
-        mouse_pos = pygame.mouse.get_pos()
-        button_hover = self.login_button_rect.collidepoint(mouse_pos)
-        button_color = (255, 255, 0) if button_hover else (255, 255, 255)
-        pygame.draw.rect(self.window, (50, 50, 50), self.login_button_rect, border_radius=5)
-        pygame.draw.rect(self.window, button_color, self.login_button_rect, 3, border_radius=5)
-
-        btn_text = self.small_font.render("登录 / 注册", True, button_color)
-        btn_rect = btn_text.get_rect(center=self.login_button_rect.center)
-        self.window.blit(btn_text, btn_rect)
+        self.login_button.draw(self.window)
 
         # 绘制提示文字
-        hint = self.small_font.render("Tab切换输入框 | Enter登录", True, (120, 120, 120))
-        hint_rect = hint.get_rect(center=(self.window_size[0] // 2, 420))
-        self.window.blit(hint, hint_rect)
+        self.window.blit(self.hint_surf, self.hint_rect)
 
         # 绘制消息
         if self.message and pygame.time.get_ticks() - self.message_timer < 3000:
@@ -173,10 +161,6 @@ class LoginMenu:
 
         pygame.display.update()
 
-    def update(self):
-        """更新状态"""
-        self.get_event()
-
     def get_event(self):
         """处理键盘和鼠标事件"""
         for event in pygame.event.get():
@@ -185,6 +169,9 @@ class LoginMenu:
                 pygame.quit()
                 exit()
 
+            elif event.type == pygame.MOUSEMOTION:
+                self.login_button.check_hover(event.pos)
+
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     # 切换输入框焦点
@@ -192,7 +179,7 @@ class LoginMenu:
                     self.password_active = self.password_rect.collidepoint(event.pos)
 
                     # 登录按钮
-                    if self.login_button_rect.collidepoint(event.pos):
+                    if self.login_button.is_clicked(event.pos):
                         self.try_login()
 
             elif event.type == pygame.KEYDOWN:
@@ -204,6 +191,7 @@ class LoginMenu:
                 elif event.key == pygame.K_RETURN:
                     self.try_login()
 
+                    # 删除字符
                 elif event.key == pygame.K_BACKSPACE:
                     if self.username_active:
                         self.username_text = self.username_text[:-1]

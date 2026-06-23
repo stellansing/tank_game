@@ -26,8 +26,8 @@ class ClientNetwork:
         # 状态接收
         self._latest_snapshot: Optional[GameStateSnapshot] = None
         self._snapshot_lock = threading.Lock()
-        self._level_config: Optional[dict] = None
-        self._walls_data: Optional[list] = None
+        self._level_config= None
+        self._walls_data= None
         self._game_started = False
 
         # 关卡切换
@@ -35,7 +35,7 @@ class ClientNetwork:
 
         # 输入发送
         self._last_input_time = 0.0
-        self._input_send_interval = 1.0 / 60.0  # 最多60次/秒
+        self._input_send_interval = 1.0 / 60.0  # 最多60次每秒
 
     @property
     def is_connected(self) -> bool:
@@ -60,7 +60,7 @@ class ClientNetwork:
 
     @property
     def pending_level_reset(self):
-        """检查是否需要因关卡切换重置渲染数据（一次性消费）"""
+        """检查是否需要因关卡切换重置渲染数据"""
         if self._pending_level_reset:
             self._pending_level_reset = False
             return True
@@ -123,8 +123,8 @@ class ClientNetwork:
         if not self._connected:
             return
 
-        now = time.time()
         # 限频发送
+        now = time.time()
         if now - self._last_input_time < self._input_send_interval:
             return
         self._last_input_time = now

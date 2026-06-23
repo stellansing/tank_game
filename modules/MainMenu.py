@@ -1,5 +1,6 @@
 import pygame
 import cfg
+from modules.BaseMenu import BaseMenu, Button
 from modules.LoadGame import MainGame, MultiplayerGame
 from modules.network import HostNetwork, ClientNetwork
 from globalCache import OtherImageCache
@@ -8,64 +9,11 @@ import socket
 import threading
 
 
-class Button:
-    """通用按钮组件"""
-    def __init__(self, x, y, width, height, text, font_path, font_size=30,
-                 color=(255, 255, 255), hover_color=(255, 255, 0),
-                 bg_color=(100, 100, 100)):
-        self.rect = pygame.Rect(x, y, width, height)
-        self.text = text
-        try:
-            self.font = pygame.font.Font(font_path, font_size)
-        except (pygame.error, FileNotFoundError) as e:
-            print(f"[警告] 加载按钮字体失败: {e}")
-            self.font = None
-        self.color = color
-        self.hover_color = hover_color
-        self.bg_color = bg_color
-        self.is_hovered = False
-
-    def draw(self, surface):
-        """绘制按钮"""
-        # 根据鼠标悬停状态选择颜色
-        current_color = self.hover_color if self.is_hovered else self.color
-
-        # 绘制按钮背景
-        pygame.draw.rect(surface, self.bg_color, self.rect, border_radius=5)
-        pygame.draw.rect(surface, current_color, self.rect, 3, border_radius=5)
-
-        # 绘制按钮文字
-        if self.font:
-            try:
-                text_surface = self.font.render(self.text, True, current_color)
-                text_rect = text_surface.get_rect(center=self.rect.center)
-                surface.blit(text_surface, text_rect)
-            except pygame.error as e:
-                print(f"[警告] 渲染按钮文字失败: {e}")
-
-    def check_hover(self, mouse_pos):
-        """检查鼠标悬停状态"""
-        self.is_hovered = self.rect.collidepoint(mouse_pos)
-        return self.is_hovered
-
-    def is_clicked(self, mouse_pos):
-        """判断按钮是否被点击"""
-        return self.rect.collidepoint(mouse_pos)
-
-
-class LevelSelectMenu:
+class LevelSelectMenu(BaseMenu):
     """关卡选择菜单"""
 
     def __init__(self):
-        self.running = None
-        pygame.display.init()
-        pygame.font.init()
-
-        self.window_size = (cfg.WIDTH, cfg.HEIGHT)
-        self.window = pygame.display.set_mode(self.window_size)
-        pygame.display.set_caption(cfg.TITLE + " - 选择关卡")
-
-        self.clock = pygame.time.Clock()
+        super().__init__(title_suffix="选择关卡")
 
         title_font = pygame.font.Font(cfg.FONT_PATH, 36)
         self.title_surface = title_font.render("选择关卡", True, (255, 255, 255))
@@ -93,8 +41,6 @@ class LevelSelectMenu:
                 f"第 {level} 关",
                 cfg.FONT_PATH,
                 font_size=24,
-                color=(255, 255, 255),
-                hover_color=(255, 255, 0),
                 bg_color=(50, 50, 50)
             )
             self.level_buttons.append((level, button))
@@ -109,8 +55,6 @@ class LevelSelectMenu:
             "返回",
             cfg.FONT_PATH,
             font_size=24,
-            color=(255, 255, 255),
-            hover_color=(255, 255, 0),
             bg_color=(80, 50, 50)
         )
 
@@ -129,11 +73,7 @@ class LevelSelectMenu:
         return sorted(levels)
 
     def run(self):
-        self.running = True
-        while self.running:
-            self.clock.tick(60)
-            self.update()
-            self.render()
+        super().run()
 
         return self.selected_level
 
@@ -152,8 +92,6 @@ class LevelSelectMenu:
 
         pygame.display.update()
 
-    def update(self):
-        self.get_event()
 
     def get_event(self):
         for event in pygame.event.get():
@@ -178,27 +116,12 @@ class LevelSelectMenu:
                         print("返回主菜单")
                         self.running = False
 
-    def quit_game(self):
-        """退出游戏"""
-        self.running = False
-        print("退出游戏")
-        pygame.quit()
-        exit()
 
-
-class MultiplayerMenu:
+class MultiplayerMenu(BaseMenu):
     """多人游戏模式选择菜单"""
 
     def __init__(self):
-        self.running = None
-        pygame.display.init()
-        pygame.font.init()
-
-        self.window_size = (cfg.WIDTH, cfg.HEIGHT)
-        self.window = pygame.display.set_mode(self.window_size)
-        pygame.display.set_caption(cfg.TITLE + " - 多人游戏")
-
-        self.clock = pygame.time.Clock()
+        super().__init__(title_suffix="多人游戏")
 
         # 标题
         title_font = pygame.font.Font(cfg.FONT_PATH, 36)
@@ -220,8 +143,6 @@ class MultiplayerMenu:
             "创建房间",
             cfg.FONT_PATH,
             font_size=24,
-            color=(255, 255, 255),
-            hover_color=(255, 255, 0),
             bg_color=(50, 50, 50)
         )
 
@@ -233,8 +154,6 @@ class MultiplayerMenu:
             "加入房间",
             cfg.FONT_PATH,
             font_size=24,
-            color=(255, 255, 255),
-            hover_color=(255, 255, 0),
             bg_color=(50, 50, 50)
         )
 
@@ -246,8 +165,6 @@ class MultiplayerMenu:
             "返回",
             cfg.FONT_PATH,
             font_size=24,
-            color=(255, 255, 255),
-            hover_color=(255, 255, 0),
             bg_color=(80, 50, 50)
         )
 
@@ -255,11 +172,7 @@ class MultiplayerMenu:
 
     def run(self):
         """运行多人游戏菜单"""
-        self.running = True
-        while self.running:
-            self.clock.tick(60)
-            self.render()
-            self.update()
+        super().run()
 
         return self.selected_mode
 
@@ -276,10 +189,6 @@ class MultiplayerMenu:
         self.back_button.draw(self.window)
 
         pygame.display.update()
-
-    def update(self):
-        """更新多人游戏菜单状态"""
-        self.get_event()
 
     def get_event(self):
         """处理多人游戏选择事件"""
@@ -308,40 +217,21 @@ class MultiplayerMenu:
                         print("返回主菜单")
                         self.running = False
 
-    def quit_game(self):
-        """退出游戏"""
-        self.running = False
-        print("退出游戏")
-        pygame.quit()
-        exit()
 
-
-class IPInputMenu:
+class IPInputMenu(BaseMenu):
     """IP地址输入对话框"""
 
     def __init__(self, default_ip="127.0.0.1"):
-        self.running = None
-        pygame.display.init()
-        pygame.font.init()
-
-        self.window_size = (cfg.WIDTH, cfg.HEIGHT)
-        self.window = pygame.display.set_mode(self.window_size)
-        pygame.display.set_caption(cfg.TITLE + " - 连接房间")
-
-        self.clock = pygame.time.Clock()
-        self.font = pygame.font.Font(cfg.FONT_PATH, 28)
-        self.small_font = pygame.font.Font(cfg.FONT_PATH, 20)
+        super().__init__(title_suffix="连接房间")
+        self.font = self.load_font(cfg.FONT_PATH, 28)
+        self.small_font = self.load_font(cfg.FONT_PATH, 20)
 
         self.ip_text = default_ip
         self.result = None
 
     def run(self):
         """运行IP输入界面"""
-        self.running = True
-        while self.running:
-            self.clock.tick(60)
-            self.update()
-            self.render()
+        super().run()
 
         return self.result
 
@@ -381,10 +271,6 @@ class IPInputMenu:
 
         pygame.display.update()
 
-    def update(self):
-        """更新IP输入状态"""
-        self.get_event()
-
     def get_event(self):
         """处理IP输入事件"""
         for event in pygame.event.get():
@@ -411,24 +297,15 @@ class IPInputMenu:
         self.result = ip
         self.running = False
 
-    def quit_game(self):
-        """退出游戏"""
-        self.running = False
-        print("退出游戏")
-        pygame.quit()
-        exit()
 
-
-class HostWaitingScreen:
+class HostWaitingScreen(BaseMenu):
     """主机等待界面"""
 
     def __init__(self, host_network: HostNetwork):
+        super().__init__(init_display=False)
         self.host_network = host_network
-        self.running = None
-        self.window = pygame.display.get_surface()
-        self.window_size = (cfg.WIDTH, cfg.HEIGHT)
-        self.font = pygame.font.Font(cfg.FONT_PATH, 28)
-        self.small_font = pygame.font.Font(cfg.FONT_PATH, 20)
+        self.font = self.load_font(cfg.FONT_PATH, 28)
+        self.small_font = self.load_font(cfg.FONT_PATH, 20)
 
         # 获取本机IP
         self.local_ip = self._get_local_ip()
@@ -485,20 +362,13 @@ class HostWaitingScreen:
                 self.running = False
 
 
-class MainMenu:
+class MainMenu(BaseMenu):
     """主菜单类"""
 
     def __init__(self, username=None):
+        caption = cfg.TITLE + f" - {username}" if username else cfg.TITLE
+        super().__init__(caption=caption)
         self.username = username
-        self.running = None
-        pygame.display.init()
-        pygame.font.init()
-
-        self.window_size = (cfg.WIDTH, cfg.HEIGHT)
-        self.window = pygame.display.set_mode(self.window_size)
-        pygame.display.set_caption(cfg.TITLE + f" - {username}" if username else cfg.TITLE)
-
-        self.clock = pygame.time.Clock()
 
         # 初始化图片缓存
         OtherImageCache.initialize(cfg)
@@ -553,13 +423,7 @@ class MainMenu:
     def run(self):
         """运行主菜单"""
 
-        self.running = True
-        while self.running:
-            self.clock.tick(60)
-
-            self.update()
-
-            self.render()
+        super().run()
 
         pygame.quit()
         exit()
@@ -578,9 +442,6 @@ class MainMenu:
 
         pygame.display.update()
 
-    def update(self):
-        """更新主菜单状态"""
-        self.get_event()
 
     def get_event(self):
         """处理主菜单事件"""
@@ -643,9 +504,4 @@ class MainMenu:
         game = MultiplayerGame(host_ip=host_ip, username=self.username)
         game.start_game(is_host=False)
 
-    def quit_game(self):
-        """退出游戏"""
-        self.running = False
-        print("退出游戏")
-        pygame.quit()
-        exit()
+
